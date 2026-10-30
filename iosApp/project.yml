@@ -1,6 +1,6 @@
 name: DshMobile
 options:
-  bundleIdPrefix: io.github.gongshichen
+  bundleIdPrefix: org.harnesslink
   deploymentTarget:
     iOS: "17.5"
   xcodeVersion: "27.2"
@@ -37,7 +37,7 @@ targets:
     info:
       path: Info.plist
       properties:
-        CFBundleDisplayName: DSH Mobile
+        CFBundleDisplayName: Harness Link
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         DSHAPNsEnvironment: "$(APS_ENVIRONMENT)"
@@ -60,7 +60,7 @@ targets:
         aps-environment: "$(APS_ENVIRONMENT)"
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: io.github.gongshichen.dshmobile
+        PRODUCT_BUNDLE_IDENTIFIER: org.harnesslink.app
         PRODUCT_NAME: DshMobile
         PRODUCT_MODULE_NAME: DshMobileApp
         MARKETING_VERSION: 0.1.0
@@ -102,7 +102,7 @@ targets:
       - target: DshMobile
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: io.github.gongshichen.dshmobile.uitests
+        PRODUCT_BUNDLE_IDENTIFIER: org.harnesslink.app.uitests
         GENERATE_INFOPLIST_FILE: YES
         TEST_TARGET_NAME: DshMobile
         TARGETED_DEVICE_FAMILY: "1,2"

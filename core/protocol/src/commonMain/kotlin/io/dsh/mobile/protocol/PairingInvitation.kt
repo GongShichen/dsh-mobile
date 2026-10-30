@@ -31,7 +31,7 @@ data class PairingInvitation(
                 WireJson.decodeFromString(serializer(), bytes.decodeToString(throwOnInvalidSequence = true))
             } catch (_: Exception) { throw ProtocolException("Invalid pairing payload") }
             if (value.v != PROTOCOL_VERSION) throw ProtocolException("Unsupported pairing version")
-            if (value.expiresAt <= nowMillis) throw ProtocolException("Pairing invitation expired")
+            if (value.expiresAt <= nowMillis) throw ProtocolException("配对二维码已过期，请在电脑上刷新二维码后重新扫描")
             if (value.endpointId.isBlank() || value.ticket.isBlank() || value.pairingId.isBlank() || value.name.isBlank()) throw ProtocolException("Incomplete pairing invitation")
             val secretLength = try { Base64.UrlSafe.withPadding(Base64.PaddingOption.ABSENT_OPTIONAL).decode(value.secret).size } catch (_: Exception) { 0 }
             if (secretLength != 32) throw ProtocolException("Invalid pairing secret")

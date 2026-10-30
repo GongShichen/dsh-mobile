@@ -1,15 +1,16 @@
-package io.github.gongshichen.dshmobile
+package org.harnesslink.app
 
 import android.Manifest
+import android.app.Activity
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.util.Log
 import android.provider.OpenableColumns
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.core.content.ContextCompat
-import com.journeyapps.barcodescanner.ScanContract
-import com.journeyapps.barcodescanner.ScanOptions
 import io.dsh.mobile.platform.FilePicker
 import io.dsh.mobile.platform.NotificationPermissions
 import io.dsh.mobile.platform.PickedFile
@@ -38,8 +39,12 @@ class AndroidUiServices(private val activity: ComponentActivity) {
     val isPresentingPlatformUi: Boolean
         get() = scanResult != null || filesResult != null || permissionResult != null || saveResult != null
 
-    private val scanLauncher = activity.registerForActivityResult(ScanContract()) { result ->
-        scanResult?.complete(result.contents)
+    private val scanLauncher = activity.registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val value = result.data?.getStringExtra(DshScanActivity.RESULT_QR)
+        val error = result.data?.getStringExtra(DshScanActivity.RESULT_ERROR)
+        Log.i("HarnessLink", "scanner.result code=${result.resultCode} received=${value != null} length=${value?.length ?: 0}")
+        if (error != null) scanResult?.completeExceptionally(IllegalStateException(error))
+        else scanResult?.complete(if (result.resultCode == Activity.RESULT_OK) value else null)
     }
     private val filesLauncher = activity.registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         filesResult?.complete(uris)
@@ -76,13 +81,8 @@ class AndroidUiServices(private val activity: ComponentActivity) {
                 val pending = CompletableDeferred<String?>()
                 scanResult = pending
                 try {
-                    scanLauncher.launch(ScanOptions().apply {
-                        setDesiredBarcodeFormats(ScanOptions.QR_CODE)
-                        setCaptureActivity(DshScanActivity::class.java)
-                        setPrompt("扫描电脑上的 DSH Mobile 配对码")
-                        setBeepEnabled(false)
-                        setOrientationLocked(false)
-                    })
+                    Log.i("HarnessLink", "scanner.open")
+                    scanLauncher.launch(Intent(activity, DshScanActivity::class.java))
                     pending.await()
                 } finally {
                     scanResult = null

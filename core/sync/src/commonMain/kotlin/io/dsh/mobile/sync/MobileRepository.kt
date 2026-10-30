@@ -83,6 +83,7 @@ class MobileRepository(
     }
 
     suspend fun pair(qr: String, deviceName: String) {
+        reportDiagnostic("pairing.started")
         initialized.await()
         resumeAllowed = true
         reconnectJob?.cancel(); reconnectJob = null
@@ -90,19 +91,24 @@ class MobileRepository(
         connectionAttempt = attempt
         try {
             val invitation = PairingInvitation.parse(qr, clock.nowMillis())
+            reportDiagnostic("pairing.qr.valid", "expiresInSeconds=${(invitation.expiresAt - clock.nowMillis()) / 1000}")
             lifecycle.withLock {
                 closeCurrent()
                 val currentEpoch = epoch
                 mutableState.update { it.copy(activeHostId = null, connection = ConnectionStatus.PAIRING, pairingName = invitation.name, error = null, sessions = emptyList(), messages = emptyList(), interactions = emptyList()) }
+                reportDiagnostic("pairing.transport.connect")
                 val connection = openPeer(PeerDescriptor(invitation.endpointId, invitation.ticket))
+                reportDiagnostic("pairing.transport.connected")
                 val session = openRpc(connection, currentEpoch)
                 rpc = session
                 var hello = decodeHello(session.call("hello"))
+                reportDiagnostic("pairing.hello", "authorized=${hello.authorized}")
                 if (!hello.authorized) {
                     val response = session.call("pairing.request", buildJsonObject {
                         put("pairingId", invitation.pairingId); put("secret", invitation.secret)
-                        put("name", deviceName.trim().ifEmpty { "DSH Mobile" }); put("platform", platform)
+                        put("name", deviceName.trim().ifEmpty { "Harness Link" }); put("platform", platform)
                     }).jsonObject
+                    reportDiagnostic("pairing.awaiting.desktop")
                     val requestId = response.string("requestId") ?: throw ProtocolException("Missing pairing request id")
                     mutableState.update { it.copy(connection = ConnectionStatus.AWAITING_APPROVAL) }
                     while (true) {
@@ -121,9 +127,11 @@ class MobileRepository(
                 if (!hello.authorized) throw ProtocolException("配对尚未授权")
                 val host = hostFromHello(hello, invitation.endpointId, invitation.ticket)
                 cache.saveHost(host)
+                reportDiagnostic("pairing.approved")
                 activate(host, session, currentEpoch)
             }
         } catch (error: Throwable) {
+            reportFailure("pairing.failed", error)
             withContext(NonCancellable) { lifecycle.withLock { closeCurrent() } }
             if (error is CancellationException) throw error
             mutableState.update { it.copy(connection = ConnectionStatus.ERROR, pairingName = null, error = error.message ?: "配对失败") }
@@ -184,7 +192,7 @@ class MobileRepository(
         val draft = cache.draft(hostId, sessionId)
         events.withLock {
             reducer = SessionReducer(sessionId).also { it.seed(cached) }
-            mutableState.update { it.copy(selectedSessionId = sessionId, messages = cached, draft = draft, sessionState = null, projections = null, jobs = emptyList(), hasMoreHistory = false) }
+            mutableState.update { it.copy(selectedSessionId = sessionId, messages = cached, draft = draft, sessionState = null, projections = null, feedback = emptyMap(), turnPresentation = emptyMap(), jobs = emptyList(), hasMoreHistory = false) }
         }
         if (rpc == null) return@withLock
         val previous = events.withLock { router.handles().filter { it.second.sessionId != null } }
@@ -198,6 +206,7 @@ class MobileRepository(
         }, sessionId)
         subscribe("sessionState", buildJsonObject { put("sessionId", sessionId) }, sessionId)
         subscribe("jobs", buildJsonObject { put("sessionId", sessionId) }, sessionId)
+        if ("feedback" in state.value.capabilities) subscribe("feedback", buildJsonObject { put("sessionId", sessionId) }, sessionId)
     }
 
     suspend fun setDraft(text: String) {
@@ -244,6 +253,7 @@ class MobileRepository(
         }).jsonObject
         events.withLock {
             if (state.value.selectedSessionId != sessionId || state.value.activeHostId != hostId) return@withLock
+            applyPresentation(page)
             reducer?.prependHistory(page)
             publishMessages(hostId, sessionId)
         }
@@ -432,7 +442,7 @@ class MobileRepository(
         closeCurrent()
         val currentEpoch = epoch
         val savedSessions = cache.sessions(hostId)
-        mutableState.update { it.copy(activeHostId = hostId, connection = ConnectionStatus.CONNECTING, error = null, path = ConnectionPath.UNKNOWN, sessions = savedSessions, messages = emptyList(), selectedSessionId = null, interactions = emptyList(), workspaces = emptyList(), models = emptyList(), defaultModel = null, jobs = emptyList(), capabilities = emptySet(), sessionState = null, projections = null, draft = "", operations = emptyList()) }
+        mutableState.update { it.copy(activeHostId = hostId, connection = ConnectionStatus.CONNECTING, error = null, path = ConnectionPath.UNKNOWN, sessions = savedSessions, messages = emptyList(), selectedSessionId = null, interactions = emptyList(), workspaces = emptyList(), models = emptyList(), defaultModel = null, feedback = emptyMap(), turnPresentation = emptyMap(), jobs = emptyList(), capabilities = emptySet(), sessionState = null, projections = null, draft = "", operations = emptyList()) }
         val connection = openPeer(PeerDescriptor(host.endpointId, host.ticket))
         try {
             val session = openRpc(connection, currentEpoch)
@@ -471,7 +481,10 @@ class MobileRepository(
     private suspend fun openPeer(descriptor: PeerDescriptor): PeerConnection {
         val seed = secureStore.get("mobile.endpoint.seed.v1") ?: secureRandomBytes(32).also { secureStore.put("mobile.endpoint.seed.v1", it) }
         if (seed.size != 32) throw ProtocolException("Stored device identity is invalid")
-        val connection = transport.connect(descriptor, seed)
+        reportDiagnostic("transport.connect.started")
+        val connection = try { withTimeout(30_000) { transport.connect(descriptor, seed) } }
+        catch (timeout: TimeoutCancellationException) { throw ProtocolException("连接电脑超时。请确认两端网络可用，并刷新电脑二维码后重试。") }
+        reportDiagnostic("transport.connect.ready")
         if (connection.remoteEndpointId != descriptor.endpointId) {
             connection.close(); throw ProtocolException("连接的电脑身份与配对记录不一致")
         }
@@ -486,8 +499,10 @@ class MobileRepository(
 
     private suspend fun subscribe(topic: String, request: JsonObject, sessionId: String? = null) {
         val currentEpoch = epoch
+        reportDiagnostic("subscription.open", "topic=$topic")
         val result = requireRpc().call("subscribe", buildJsonObject { put("topic", topic); put("request", request) })
         val handle = WireJson.decodeFromJsonElement(SubscriptionHandle.serializer(), result)
+        reportDiagnostic("subscription.ready", "topic=$topic")
         events.withLock {
             if (currentEpoch != epoch || (sessionId != null && state.value.selectedSessionId != sessionId)) return@withLock
             router.register(handle, SubscriptionTarget(topic, sessionId)).forEach { applyEvent(it) }
@@ -508,7 +523,15 @@ class MobileRepository(
                 val id = routed.target.sessionId ?: return
                 if (state.value.selectedSessionId != id) return
                 payload.obj("projections")?.let { projectionReducer.baseline(id, it) }
+                applyPresentation(payload)
                 reducer?.apply(payload); publishMessages(hostId, id)
+            }
+            "feedback" -> if (routed.target.sessionId == state.value.selectedSessionId && payload.string("type") == "baseline") {
+                val items = payload.obj("value")?.array("items").orEmpty().mapNotNull { value ->
+                    val item = value as? JsonObject ?: return@mapNotNull null
+                    item.string("messageId")?.let { it to item }
+                }.toMap()
+                mutableState.update { it.copy(feedback = items) }
             }
             "sessionState" -> if (routed.target.sessionId == state.value.selectedSessionId) mutableState.update { current ->
                 current.copy(sessionState = payload, sessions = current.sessions.map { if (it.id == routed.target.sessionId) it.copy(running = payload.boolean("running") ?: it.running) else it })
@@ -547,6 +570,12 @@ class MobileRepository(
                 }
             }
         }
+    }
+
+    private fun applyPresentation(payload: JsonObject) {
+        val rows = payload.obj("presentation")?.array("turns") ?: return
+        val values = rows.mapNotNull { raw -> (raw as? JsonObject)?.let { item -> item.long("turn")?.let { it to item } } }.toMap()
+        mutableState.update { it.copy(turnPresentation = it.turnPresentation + values) }
     }
 
     private suspend fun publishMessages(hostId: String, sessionId: String) {
@@ -624,7 +653,7 @@ class MobileRepository(
     }
     private fun requireHost(): String = state.value.activeHostId ?: throw ProtocolException("请先选择电脑")
     private fun requireSelectedSession(): String = state.value.selectedSessionId ?: throw ProtocolException("请先选择会话")
-    private fun showError(error: Throwable) { if (error !is CancellationException) mutableState.update { it.copy(error = error.message ?: "操作失败") } }
+    private fun showError(error: Throwable) { reportFailure("repository.error", error); if (error !is CancellationException) mutableState.update { it.copy(error = error.message ?: "操作失败") } }
     private fun decodeHello(value: JsonElement): Hello = WireJson.decodeFromJsonElement(Hello.serializer(), value).also {
         if (it.protocolVersion != PROTOCOL_VERSION) throw ProtocolException("桌面插件协议不兼容")
     }

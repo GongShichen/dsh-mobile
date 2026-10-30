@@ -42,6 +42,7 @@ kotlin {
         }
         androidMain.dependencies { implementation("net.java.dev.jna:jna:${libs.versions.jna.get()}@aar") }
         getByName("androidDeviceTest").dependencies {
+            implementation("com.google.mlkit:barcode-scanning:17.3.0")
             implementation(libs.serialization.json)
             implementation(kotlin("test"))
             implementation("androidx.test:runner:1.7.0")

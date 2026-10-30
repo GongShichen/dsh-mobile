@@ -11,6 +11,7 @@ kotlin {
         compileSdk = 37
         minSdk = 26
         withHostTestBuilder {}
+        withDeviceTestBuilder {}.configure { instrumentationRunner = "androidx.test.runner.AndroidJUnitRunner" }
     }
     iosArm64()
     iosSimulatorArm64()
@@ -25,6 +26,13 @@ kotlin {
             implementation(kotlin("test"))
             implementation(libs.coroutines.test)
         }
+        getByName("androidDeviceTest").dependencies {
+            implementation(kotlin("test"))
+            implementation(libs.coroutines.test)
+            implementation("androidx.test:runner:1.7.0")
+            implementation("androidx.test.ext:junit:1.3.0")
+        }
+        getByName("androidHostTest").dependencies { implementation("app.cash.sqldelight:sqlite-driver:2.4.1") }
         androidMain.dependencies { implementation(libs.sqldelight.android) }
         iosMain.dependencies { implementation(libs.sqldelight.native) }
     }

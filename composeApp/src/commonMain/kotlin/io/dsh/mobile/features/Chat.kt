@@ -53,7 +53,7 @@ fun ChatScreen(state: MobileState, repository: MobileRepository, busy: Boolean, 
     val turnStart = state.messages.lastOrNull { it.raw.string("type") == "turn/start" }?.sequence
     val turnEnd = state.messages.lastOrNull { it.raw.string("type") == "turn/end" }?.sequence ?: -1
     val activeTurn = state.selectedSession?.running == true && turnStart != null && turnStart > turnEnd
-    val messages = state.messages.filter { it.role in setOf("user", "assistant") || it.raw.string("type") in setOf("tool/call", "step/error", "turn/error") || (it.raw.string("type") == "tool/result" && toolResultId(it) !in calls) }
+    val messages = state.messages.filter { it.role in setOf("user", "assistant") || it.raw.string("type") in setOf("tool/call", "step/error", "turn/error", "turn/end") || (it.raw.string("type") == "tool/result" && toolResultId(it) !in calls) }
     var followTail by remember(state.selectedSessionId) { mutableStateOf(true) }
     val dragging by list.interactionSource.collectIsDraggedAsState()
     LaunchedEffect(dragging) { if (dragging) followTail = false }
@@ -76,10 +76,16 @@ fun ChatScreen(state: MobileState, repository: MobileRepository, busy: Boolean, 
             if (messages.isEmpty()) item { Column(Modifier.fillMaxWidth().padding(top = 72.dp, bottom = 32.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) { IconTile("CHATS"); Text(if (state.hosts.isEmpty()) "有什么可以帮你？" else "继续你的想法", style = MaterialTheme.typography.titleLarge); Text(if (state.hosts.isEmpty()) "连接电脑，继续对话与任务。" else "从一个问题开始，或让电脑继续完成任务。", style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.widthIn(max = 280.dp)); if (state.hosts.isEmpty()) TextButton(onClick = onConnect) { Text("添加电脑") } } }
             itemsIndexed(messages, key = { _, message -> message.presentationId ?: message.id }) { index, message ->
                 val previous = messages.getOrNull(index - 1)
-                val lastReply = message.role == "assistant" && !message.streaming && message.text.isNotBlank()
+                val presentation = message.raw.obj("data")?.number("turn")?.let { state.turnPresentation[it] }
+                val lastReply = presentation == null && message.role == "assistant" && !message.streaming && message.text.isNotBlank()
                     && (messages.getOrNull(index + 1) == null || messages.getOrNull(index + 1)?.role == "user")
                 Box(Modifier.padding(top = when { index == 0 -> 0.dp; message.role == "user" -> 24.dp; previous?.role == "user" -> 16.dp; else -> 2.dp })) {
-                    MessageCard(message, results[(message.raw.obj("data")?.get("callId") as? JsonPrimitive)?.contentOrNull], activeTurn && (message.sequence ?: -1) > (turnStart ?: Long.MAX_VALUE), lastReply)
+                    if (message.raw.string("type") == "turn/end") {
+                        presentation?.let { Column { if (it.number("firstAssistantSeq") == null) TurnStatus(it); TurnActions(it, state, repository, busy, run) } }
+                    } else Column {
+                        if (presentation != null && message.sequence == presentation.number("firstAssistantSeq")) TurnStatus(presentation)
+                        MessageCard(message, results[(message.raw.obj("data")?.get("callId") as? JsonPrimitive)?.contentOrNull], activeTurn && (message.sequence ?: -1) > (turnStart ?: Long.MAX_VALUE), lastReply)
+                    }
                 }
             }
             items(state.interactions.filter { it.sessionId == null || it.sessionId == state.selectedSessionId }, key = { "interaction:${it.id}" }) { interaction -> InteractionCard(interaction, state.connected && !busy, repository, run) }
@@ -95,7 +101,7 @@ fun ChatScreen(state: MobileState, repository: MobileRepository, busy: Boolean, 
         Surface(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp), shape = RoundedCornerShape(24.dp), border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant), shadowElevation = 0.dp, color = MaterialTheme.colorScheme.surface) {
             Column(Modifier.fillMaxWidth().padding(8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 attachments.forEach { (name, receipt) -> Row(verticalAlignment = Alignment.CenterVertically) { Text(name, modifier = Modifier.weight(1f), maxLines = 1); TextButton(onClick = { attachments = attachments.filterNot { it.second == receipt } }) { Text("移除") } } }
-                TextField(draft, { text -> draft = text; scope.launch { repository.setDraft(text) } }, modifier = Modifier.fillMaxWidth().keyboardInputArea().semantics { contentDescription = "消息输入" }, placeholder = { Text(if (state.connected) "给 DeepSeek 发消息…" else "连接恢复后可发送") }, maxLines = 6, colors = TextFieldDefaults.colors(focusedContainerColor = MaterialTheme.colorScheme.surface, unfocusedContainerColor = MaterialTheme.colorScheme.surface, focusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent, unfocusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent), shape = MaterialTheme.shapes.large)
+                TextField(draft, { text -> draft = text; scope.launch { repository.setDraft(text) } }, modifier = Modifier.fillMaxWidth().keyboardInputArea("composer").semantics { contentDescription = "消息输入" }, placeholder = { Text(if (state.connected) "给 DeepSeek 发消息…" else "连接恢复后可发送") }, maxLines = 6, colors = TextFieldDefaults.colors(focusedContainerColor = MaterialTheme.colorScheme.surface, unfocusedContainerColor = MaterialTheme.colorScheme.surface, focusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent, unfocusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent), shape = MaterialTheme.shapes.large)
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Box {
                         PlatformActionButton(icon = "PLUS", label = "附件", enabled = state.connected && !busy && AppGraph.filePicker != null, onClick = { dismissInput(); attachmentMenu = true })

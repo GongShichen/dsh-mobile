@@ -312,7 +312,7 @@
 					"$(inherited)",
 					"-lsqlite3",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = io.github.gongshichen.dshmobile;
+				PRODUCT_BUNDLE_IDENTIFIER = org.harnesslink.app;
 				PRODUCT_MODULE_NAME = DshMobileApp;
 				PRODUCT_NAME = DshMobile;
 				SDKROOT = iphoneos;
@@ -342,7 +342,7 @@
 					"$(inherited)",
 					"-lsqlite3",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = io.github.gongshichen.dshmobile;
+				PRODUCT_BUNDLE_IDENTIFIER = org.harnesslink.app;
 				PRODUCT_MODULE_NAME = DshMobileApp;
 				PRODUCT_NAME = DshMobile;
 				SDKROOT = iphoneos;
@@ -430,7 +430,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = io.github.gongshichen.dshmobile.uitests;
+				PRODUCT_BUNDLE_IDENTIFIER = org.harnesslink.app.uitests;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_TARGET_NAME = DshMobile;
@@ -510,7 +510,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = io.github.gongshichen.dshmobile.uitests;
+				PRODUCT_BUNDLE_IDENTIFIER = org.harnesslink.app.uitests;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_TARGET_NAME = DshMobile;

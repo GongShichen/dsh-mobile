@@ -1,4 +1,4 @@
-package io.github.gongshichen.dshmobile
+package org.harnesslink.app
 
 import android.Manifest
 import android.app.NotificationChannel

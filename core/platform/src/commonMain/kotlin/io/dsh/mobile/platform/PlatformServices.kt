@@ -48,3 +48,6 @@ interface PushService {
     suspend fun configure(options: FirebasePublicOptions?): PushAvailability
     suspend fun requestPermission(): Boolean
 }
+
+/** Device-local rendering of the desktop event timestamp; never a second message clock. */
+expect fun formatMessageTime(epochMillis: Long): String

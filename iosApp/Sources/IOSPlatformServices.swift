@@ -73,7 +73,7 @@ final class IOSPlatformServices: NSObject, NativeUiBridge, @unchecked Sendable {
     func appMetadata() -> PushAppMetadata {
         let team = Bundle.main.object(forInfoDictionaryKey: "DSHSigningTeam") as? String
         let entitlementEnvironment = Bundle.main.object(forInfoDictionaryKey: "DSHAPNsEnvironment") as? String
-        return PushAppMetadata(platform: "ios", applicationId: Bundle.main.bundleIdentifier ?? "io.github.gongshichen.dshmobile",
+        return PushAppMetadata(platform: "ios", applicationId: Bundle.main.bundleIdentifier ?? "org.harnesslink.app",
             teamId: team?.isEmpty == false ? team : nil,
             environment: IOSPushCapability.isEnabled ? (entitlementEnvironment == "production" ? "production" : (entitlementEnvironment == "development" ? "sandbox" : nil)) : nil)
     }
@@ -102,10 +102,13 @@ final class IOSPlatformServices: NSObject, NativeUiBridge, @unchecked Sendable {
                     try self.reservePresentation(operation)
                     let parent = try self.presenter()
                     let scanner = QRScannerController { value, error in
-                        operation.complete {
-                            parent.dismiss(animated: true)
-                            if let error { callback.failure(message: error.localizedDescription) }
-                            else { callback.success(value_: value) }
+                        // Resume shared pairing only after UIKit restores the underlying scene.
+                        // Opening a Compose dialog during this dismissal can strand input focus.
+                        parent.dismiss(animated: true) {
+                            operation.complete {
+                                if let error { callback.failure(message: error.localizedDescription) }
+                                else { callback.success(value_: value) }
+                            }
                         }
                     }
                     scanner.modalPresentationStyle = .fullScreen

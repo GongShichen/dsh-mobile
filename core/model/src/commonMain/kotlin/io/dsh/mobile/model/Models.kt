@@ -95,6 +95,8 @@ data class MobileState(
     val workspaces: List<JsonObject> = emptyList(),
     val models: List<JsonObject> = emptyList(),
     val defaultModel: JsonObject? = null,
+    val feedback: Map<String, JsonObject> = emptyMap(),
+    val turnPresentation: Map<Long, JsonObject> = emptyMap(),
     val jobs: List<JsonObject> = emptyList(),
     val hasMoreHistory: Boolean = false,
 ) {

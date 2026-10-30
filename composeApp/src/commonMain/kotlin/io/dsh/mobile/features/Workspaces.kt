@@ -2,6 +2,9 @@ package io.dsh.mobile.features
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.semantics.contentDescription
@@ -111,6 +114,10 @@ fun WorkspacesScreen(state: MobileState, repository: MobileRepository, busy: Boo
 private fun FileBrowser(state: MobileState, repository: MobileRepository, busy: Boolean, run: RunAction) {
     val sessionId = state.selectedSessionId
     if (sessionId == null) { EmptyPanel("先选择一段对话", "文件浏览使用对话所属工作区。请先打开对话，再查看文件。"); return }
+    val workspace = state.workspaces.firstOrNull { row -> (state.selectedSession?.workspaceId?.let { row.string("workspaceId") == it } == true) || row.array("sessionIds").any { (it as? JsonPrimitive)?.contentOrNull == sessionId } }
+    val workspaceName = workspace?.string("title")?.takeIf { it.isNotBlank() } ?: "当前会话的工作区"
+    val rootPath = state.selectedSession?.raw?.string("cwd") ?: workspace?.string("path")
+    val clipboard = LocalClipboardManager.current
     var path by remember { mutableStateOf("") }
     var entries by remember { mutableStateOf<List<JsonObject>>(emptyList()) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -131,6 +138,16 @@ private fun FileBrowser(state: MobileState, repository: MobileRepository, busy: 
         finally { loading = false }
     }
     Column(Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(workspaceName, style = MaterialTheme.typography.titleMedium)
+            Text("电脑上的文件 · 点击文件可预览", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            rootPath?.let { fullPath -> Row(verticalAlignment = Alignment.CenterVertically) {
+                SelectionContainer(Modifier.weight(1f)) { Text(fullPath, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                IconButton(onClick = { clipboard.setText(AnnotatedString(fullPath)) }, modifier = Modifier.semantics { contentDescription = "复制电脑路径" }) { NavigationIcon("COPY", 16.dp) }
+            } }
+        }
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .5f))
+
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
                 TextButton(onClick = { path = "" }) { NavigationIcon("WORKSPACES", 16.dp); Spacer(Modifier.width(6.dp)); Text("根目录", style = MaterialTheme.typography.bodyMedium) }
@@ -168,6 +185,13 @@ private fun FileBrowser(state: MobileState, repository: MobileRepository, busy: 
         Surface(shape = MaterialTheme.shapes.large, modifier = Modifier.fillMaxWidth().fillMaxHeight(.85f)) {
             Column(Modifier.padding(16.dp)) {
                 Text(previewPath.substringAfterLast('/'), style = MaterialTheme.typography.titleMedium)
+                Text("只读预览 · ${previewPath.substringAfterLast('.', "文件").uppercase()} · $workspaceName", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                SelectionContainer { Text(previewPath, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                preview?.let { page ->
+                    val start = (page["offset"] as? JsonPrimitive)?.longOrNull ?: 1
+                    val count = (page["lines"] as? JsonPrimitive)?.longOrNull ?: 0
+                    Text(if (count == 0L) "文件为空或没有可预览的文本" else "第 $start–${start + count - 1} 行" + if ((page["eof"] as? JsonPrimitive)?.booleanOrNull == true) " · 已显示全部文本" else " · 还有更多内容", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
                 val bitmap = imagePreview
                 if (bitmap != null) Image(bitmap, contentDescription = previewPath.substringAfterLast('/'), modifier = Modifier.weight(1f).fillMaxWidth().padding(vertical = 12.dp), contentScale = ContentScale.Fit)
                 else Box(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(vertical = 12.dp)) { CodeBlock(preview?.string("text").orEmpty(), previewPath.substringAfterLast('.', "")) }

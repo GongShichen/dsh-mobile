@@ -10,8 +10,8 @@ final class DshMobileUITests: XCTestCase {
         app.launchArguments = ["-AppleLanguages", "(zh-Hans)", "-AppleLocale", "zh_CN"]
         addUIInterruptionMonitor(withDescription: "Requested camera or clipboard permission") { alert in
             for title in ["允许", "好", "OK", "Allow", "允许粘贴", "Allow Paste"] {
-                let button = alert.buttons[title]
-                if button.exists { button.tap(); return true }
+                let buttons = alert.buttons.matching(NSPredicate(format: "label == %@", title))
+                if let button = buttons.allElementsBoundByIndex.first(where: { $0.isHittable }) { button.tap(); return true }
             }
             return false
         }
@@ -57,27 +57,77 @@ final class DshMobileUITests: XCTestCase {
         attachScreenshot("scanner-returned")
     }
 
+    func testInputAcceptsTouchTypingAndOutsideDismissal() {
+        let input = app.textViews.matching(NSPredicate(format: "label CONTAINS %@", "消息输入")).firstMatch
+        XCTAssertTrue(input.waitForExistence(timeout: 10))
+        input.coordinate(withNormalizedOffset: CGVector(dx: 0.35, dy: 0.45)).tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 8), "Touching the composer must open the software keyboard")
+        input.typeText("keyboard regression")
+        XCTAssertTrue((input.value as? String)?.contains("keyboard regression") == true, "The focused composer must accept typed text")
+        attachScreenshot("composer-keyboard-open")
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.2)).tap()
+        let hidden = XCTNSPredicateExpectation(predicate: NSPredicate { [weak self] _, _ in self?.app.keyboards.count == 0 }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [hidden], timeout: 5), .completed)
+    }
+
+    func testManualPairingInputsAcceptTouchTyping() {
+        tapLabel("设备")
+        tapLabel("或粘贴配对链接")
+        let name = app.descendants(matching: .any).matching(NSPredicate(format: "(elementType == %d OR elementType == %d) AND label CONTAINS %@", XCUIElement.ElementType.textField.rawValue, XCUIElement.ElementType.textView.rawValue, "手机名称")).firstMatch
+        XCTAssertTrue(name.waitForExistence(timeout: 10))
+        name.coordinate(withNormalizedOffset: CGVector(dx: 0.4, dy: 0.5)).tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 8), "Touching a pairing field must open the keyboard")
+        name.typeText(" input check")
+        XCTAssertTrue((name.value as? String)?.contains("input check") == true)
+        attachScreenshot("pairing-keyboard-open")
+        tapLabel("取消")
+    }
+
+    func testScannerReturnRestoresComposerInput() {
+        tapLabel("设备")
+        tapLabel("扫描配对二维码")
+        app.tap()
+        let returned = XCTNSPredicateExpectation(predicate: NSPredicate { [weak self] _, _ in
+            self?.element("扫描配对二维码").isHittable == true
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [returned], timeout: 20), .completed)
+        tapLabel("返回")
+        let input = app.textViews.matching(NSPredicate(format: "label CONTAINS %@", "消息输入")).firstMatch
+        XCTAssertTrue(input.waitForExistence(timeout: 10))
+        input.coordinate(withNormalizedOffset: CGVector(dx: 0.35, dy: 0.45)).press(forDuration: 0.15)
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 8))
+        input.typeText("scanner return input")
+        XCTAssertTrue((input.value as? String)?.contains("scanner return input") == true)
+        attachScreenshot("scanner-return-composer-keyboard")
+    }
+
     /// Uses the real deterministic DSH fixture session on the paired, isolated QA host.
     func testOptionalReasoningDisclosure() throws {
         guard ProcessInfo.processInfo.environment["DSH_UI_PRESENTATION"] == "1" else {
             throw XCTSkip("Prepare the isolated DSH fixture and set DSH_UI_PRESENTATION=1")
         }
         tapLabel("菜单")
+        let search = app.descendants(matching: .any).matching(NSPredicate(format: "(elementType == %d OR elementType == %d) AND label CONTAINS %@", XCUIElement.ElementType.textField.rawValue, XCUIElement.ElementType.textView.rawValue, "搜索对话")).firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 10))
+        search.tap()
+        search.typeText("Mobile smoke session")
         let session = app.staticTexts.matching(NSPredicate(format: "label == %@", "Mobile smoke session")).firstMatch
         XCTAssertTrue(session.waitForExistence(timeout: 20))
         session.tap()
         let answer = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Mobile round trip verified.")).firstMatch
         XCTAssertTrue(answer.waitForExistence(timeout: 20))
-        let thoughts = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "思考"))
-        XCTAssertTrue(thoughts.firstMatch.waitForExistence(timeout: 10))
+        let firstThought = app.buttons.matching(NSPredicate(format: "label CONTAINS %@ AND value == %@", "Checking the mobile approval", "已收起")).firstMatch
+        for _ in 0..<4 { if firstThought.exists && firstThought.isHittable { break }; app.swipeDown() }
+        XCTAssertTrue(firstThought.waitForExistence(timeout: 10))
         attachScreenshot("conversation-collapsed")
-        thoughts.firstMatch.tap()
-        let body = app.staticTexts.matching(NSPredicate(format: "label == %@", "Checking the mobile approval and tool flow.")).firstMatch
+        firstThought.tap()
+        let body = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Checking the mobile approval and tool flow.")).firstMatch
         XCTAssertTrue(body.waitForExistence(timeout: 5))
+        let openedThought = app.buttons.matching(NSPredicate(format: "label == %@ AND value == %@", "思考", "已展开")).firstMatch
+        XCTAssertTrue(openedThought.waitForExistence(timeout: 5))
         attachScreenshot("conversation-expanded")
-        thoughts.firstMatch.tap()
-        // The collapsed preview may contain the same text as a one-line reasoning body.
-        XCTAssertEqual(thoughts.firstMatch.value as? String, "已收起")
+        openedThought.tap()
+        XCTAssertTrue(firstThought.waitForExistence(timeout: 5))
         XCTAssertTrue(answer.exists, "Reasoning disclosure must not remove the final answer")
     }
 
@@ -161,6 +211,35 @@ final class DshMobileUITests: XCTestCase {
         attachScreenshot("workspace-header-keyboard-dismissed")
     }
 
+    func testOptionalDesktopTurnMetadataAndTrace() throws {
+        guard ProcessInfo.processInfo.environment["DSH_UI_PRESENTATION"] == "1" else { throw XCTSkip("Requires the desktop presentation fixture") }
+        tapLabel("菜单")
+        let session = app.staticTexts["同步状态验证"]
+        XCTAssertTrue(session.waitForExistence(timeout: 20))
+        session.tap()
+        let usage = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "用量 44 tok")).firstMatch
+        XCTAssertTrue(usage.waitForExistence(timeout: 20), "Usage must arrive from the desktop presentation payload")
+        usage.tap()
+        XCTAssertTrue(element("本轮用量").waitForExistence(timeout: 5))
+        XCTAssertTrue(element("44").exists)
+        attachScreenshot("desktop-token-usage")
+        tapLabel("关闭")
+        let like = element("好的回答")
+        XCTAssertTrue(like.waitForExistence(timeout: 10))
+        let expected = (like.value as? String) == "已赞" ? "未评价" : "已赞"
+        like.tap()
+        let selected = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in (like.value as? String) == expected }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [selected], timeout: 10), .completed)
+        attachScreenshot("desktop-feedback-synced")
+        like.tap()
+        tapLabel("查看对话轨迹")
+        XCTAssertTrue(element("对话轨迹").waitForExistence(timeout: 10))
+        XCTAssertTrue(element("搜索轨迹").exists)
+        attachScreenshot("trajectory-dialog")
+        tapLabel("关闭轨迹")
+        XCTAssertTrue(app.buttons["菜单"].waitForExistence(timeout: 5))
+    }
+
     /// Opt in after placing a short-lived invitation on this simulator's pasteboard with simctl pbcopy.
     /// The test never reads or logs the invitation and never uses typeText for credential-bearing text.
     func testOptionalPairFromPasteboardAndCreateConversation() throws {
@@ -226,6 +305,12 @@ final class DshMobileUITests: XCTestCase {
         XCTAssertTrue(element("继续你的想法").waitForExistence(timeout: 20), "The desktop must create and select a real conversation")
         XCTAssertTrue(element("发送").exists)
         attachScreenshot("paired-new-conversation")
+        let input = app.textViews.matching(NSPredicate(format: "label CONTAINS %@", "消息输入")).firstMatch
+        input.coordinate(withNormalizedOffset: CGVector(dx: 0.35, dy: 0.45)).press(forDuration: 0.15)
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 8), "Pairing dialogs must restore text input in the underlying screen")
+        input.typeText("paired input regression")
+        XCTAssertTrue((input.value as? String)?.contains("paired input regression") == true)
+        attachScreenshot("paired-composer-keyboard-open")
     }
 
     private func element(_ label: String) -> XCUIElement {

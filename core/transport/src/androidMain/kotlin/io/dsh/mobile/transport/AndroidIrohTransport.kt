@@ -1,6 +1,9 @@
 package io.dsh.mobile.transport
 
 import android.content.Context
+import android.util.Log
+import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import computer.iroh.BiStream
 import computer.iroh.Connection
 import computer.iroh.Endpoint
@@ -35,7 +38,9 @@ class AndroidIrohTransport(context: Context) : PeerTransport {
 
     override suspend fun connect(peer: PeerDescriptor, seed: ByteArray): PeerConnection {
         require(seed.size == 32) { "An iroh identity requires a 32-byte seed" }
-        val endpoint = Endpoint.bind(EndpointOptions(secretKey = seed, alpns = listOf(MOBILE_ALPN.encodeToByteArray())))
+        Log.i("HarnessLink-P2P", "endpoint.bind.started")
+        val endpoint = withTimeout(15_000) { Endpoint.bind(EndpointOptions(secretKey = seed, alpns = listOf(MOBILE_ALPN.encodeToByteArray()))) }
+        Log.i("HarnessLink-P2P", "endpoint.bind.ready")
         var connection: Connection? = null
         try {
             val address = EndpointId.fromString(peer.endpointId).use { identity ->
@@ -49,15 +54,18 @@ class AndroidIrohTransport(context: Context) : PeerTransport {
                     }
                 } else EndpointAddr(identity, null, emptyList())
             }
-            connection = address.use { endpoint.connect(it, MOBILE_ALPN.encodeToByteArray()) }
+            Log.i("HarnessLink-P2P", "endpoint.connect.started ticket=${peer.ticket != null}")
+            connection = withTimeout(30_000) { address.use { endpoint.connect(it, MOBILE_ALPN.encodeToByteArray()) } }
+            Log.i("HarnessLink-P2P", "endpoint.connect.ready")
             val remoteId = connection.remoteId().use { it.toString() }
             require(remoteId == peer.endpointId) { "Desktop identity verification failed" }
             currentCoroutineContext().ensureActive()
             return AndroidPeerConnection(endpoint, connection, remoteId)
         } catch (error: Throwable) {
+            Log.w("HarnessLink-P2P", "endpoint.connect.failed ${error::class.simpleName}")
             withContext(NonCancellable) {
                 connection?.close(1L, "connection cancelled".encodeToByteArray())
-                runCatching { endpoint.shutdown() }
+                runCatching { withTimeoutOrNull(5000) { endpoint.shutdown() } }
                 connection?.destroy()
                 endpoint.destroy()
             }
@@ -78,7 +86,9 @@ private class AndroidPeerConnection(
     override val path = mutablePath.asStateFlow()
     private val watcher = native.watchPaths(object : PathChangeCallback {
         override suspend fun onChange(paths: List<PathSnapshot>) {
-            mutablePath.update { if (disposed.get()) PeerPath.CLOSED else pathOf(paths) }
+            val next = if (disposed.get()) PeerPath.CLOSED else pathOf(paths)
+            if (mutablePath.value != next) Log.i("HarnessLink-P2P", "connection.path $next")
+            mutablePath.value = next
         }
     })
     init { scope.launch { try { native.closed() } finally { close() } } }
@@ -98,7 +108,7 @@ private class AndroidPeerConnection(
             native.close(0L, "closed".encodeToByteArray())
             runCatching { watcher.stop() }
             streams.toList().forEach { runCatching { it.close() } }
-            runCatching { endpoint.shutdown() }
+            runCatching { withTimeoutOrNull(5000) { endpoint.shutdown() } }
             watcher.destroy()
             native.destroy()
             endpoint.destroy()

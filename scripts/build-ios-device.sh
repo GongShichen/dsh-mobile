@@ -10,7 +10,7 @@ Required environment:
   DSH_DEVELOPMENT_TEAM    Your 10-character Apple Developer Team ID.
 Optional environment:
   DSH_IOS_DEVICE_ID       Explicit devicectl device identifier for --install.
-  DSH_IOS_BUNDLE_ID       Override the bundle ID (default: io.github.gongshichen.dshmobile).
+  DSH_IOS_BUNDLE_ID       Override the bundle ID (default: org.harnesslink.app).
   DSH_IOS_DERIVED_DATA    Reuse an existing DerivedData/package cache directory.
 
 Usage:
@@ -54,7 +54,7 @@ if $install_app && [[ -z "$device_id" ]]; then
     printf '%s\n' '--install requires --device ID or DSH_IOS_DEVICE_ID; no device is selected automatically.' >&2
     exit 2
 fi
-bundle_id="${DSH_IOS_BUNDLE_ID:-io.github.gongshichen.dshmobile}"
+bundle_id="${DSH_IOS_BUNDLE_ID:-org.harnesslink.app}"
 [[ "$bundle_id" =~ ^[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$ ]] || { printf 'Invalid DSH_IOS_BUNDLE_ID.\n' >&2; exit 2; }
 command -v xcodegen >/dev/null || { printf 'Install xcodegen before building (brew install xcodegen).\n' >&2; exit 1; }
 xcodebuild -checkFirstLaunchStatus

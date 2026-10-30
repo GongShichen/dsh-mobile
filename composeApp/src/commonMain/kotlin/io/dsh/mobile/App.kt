@@ -20,6 +20,7 @@ import io.dsh.mobile.design.DshTheme
 import io.dsh.mobile.design.KeyboardDismissalHost
 import io.dsh.mobile.design.PlatformActionButton
 import io.dsh.mobile.model.MobileState
+import io.dsh.mobile.platform.reportFailure
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
@@ -31,11 +32,12 @@ fun App() {
     val repository = AppGraph.repository
     DshTheme {
         if (repository == null) {
-            Surface(Modifier.fillMaxSize()) { EmptyPanel("正在准备 DSH Mobile", "连接服务初始化后即可添加电脑。") }
+            Surface(Modifier.fillMaxSize()) { EmptyPanel("正在准备 Harness Link", "连接服务初始化后即可添加电脑。") }
             return@DshTheme
         }
         val state by repository.state.collectAsState()
         var tab by remember { mutableStateOf(MobileTab.CHATS) }
+        var traceOpen by remember { mutableStateOf(false) }
         var busy by remember { mutableStateOf(false) }
         var uiError by remember { mutableStateOf<String?>(null) }
         val scope = rememberCoroutineScope()
@@ -50,6 +52,7 @@ fun App() {
             busy = true
             try { work() } catch (error: Throwable) {
                 if (error is CancellationException) throw error
+                reportFailure("ui.action.failed", error)
                 uiError = error.message ?: "操作失败，请重试"
             } finally { busy = false }
         } }
@@ -58,11 +61,12 @@ fun App() {
         LaunchedEffect(state.error, uiError) {
             (uiError ?: state.error)?.let { snackbar.showSnackbar(it); uiError = null; repository.clearError() }
         }
+        if (traceOpen) TrajectoryDialog(state, repository, busy, run) { traceOpen = false }
         KeyboardDismissalHost {
         ModalNavigationDrawer(drawerState = drawer, drawerContent = {
             ModalDrawerSheet(modifier = Modifier.width(320.dp).fillMaxHeight(), drawerContainerColor = MaterialTheme.colorScheme.background) {
                 Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("DSH Mobile", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                    Text("Harness Link", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
                     IconButton(onClick = { scope.launch { closeDrawer() } }, modifier = Modifier.semantics { contentDescription = "收起菜单" }) { NavigationIcon("BACK") }
                 }
                 TextButton(onClick = { if (state.connected) scope.launch { closeDrawer(); tab = MobileTab.CHATS; run { repository.createSession() } } else navigate(MobileTab.DEVICES) }, enabled = !busy,
@@ -93,6 +97,7 @@ fun App() {
                 }, navigationIcon = {
                     PlatformActionButton(icon = if (tab == MobileTab.CHATS) "MENU" else "BACK", label = if (tab == MobileTab.CHATS) "菜单" else "返回") { dismissKeyboard(); if (tab == MobileTab.CHATS) scope.launch { drawer.open() } else tab = MobileTab.CHATS }
                 }, actions = {
+                    if (tab == MobileTab.CHATS && state.selectedSessionId != null) IconButton(onClick = { dismissKeyboard(); traceOpen = true }, modifier = Modifier.semantics { contentDescription = "查看对话轨迹" }) { NavigationIcon("TIMELINE", 19.dp) }
                     if (tab == MobileTab.CHATS) PlatformActionButton(icon = "NEW_CHAT", label = "新对话", enabled = !busy) { dismissKeyboard(); if (state.connected) run { repository.createSession() } else navigate(MobileTab.DEVICES) }
                 }, colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = MaterialTheme.colorScheme.background)) },
             ) { padding ->

@@ -1,4 +1,4 @@
-package io.github.gongshichen.dshmobile
+package org.harnesslink.app
 
 import android.os.Bundle
 import android.content.Intent

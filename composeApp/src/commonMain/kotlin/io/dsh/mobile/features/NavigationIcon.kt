@@ -24,6 +24,12 @@ fun NavigationIcon(name: String, iconSize: Dp = 23.dp) {
         val u = size.width / 24
         val stroke = Stroke(width = 1.7f * u, cap = StrokeCap.Round)
         when (name) {
+            "LIKE", "DISLIKE" -> { rotate(if (name == "DISLIKE") 180f else 0f) { val p=Path().apply {moveTo(8*u,10*u);lineTo(12*u,3*u);quadraticTo(17*u,2*u,15*u,10*u);lineTo(20*u,10*u);quadraticTo(22*u,10*u,21*u,13*u);lineTo(19*u,20*u);lineTo(8*u,20*u);close()};drawPath(p,color,style=stroke);drawRoundRect(color,Offset(3*u,10*u),Size(4*u,10*u),CornerRadius(u),style=stroke) } }
+            "BRANCH" -> { drawCircle(color,2.3f*u,Offset(17*u,4*u),style=stroke);drawCircle(color,2.3f*u,Offset(17*u,20*u),style=stroke);val p=Path().apply {moveTo(3*u,12*u);lineTo(8*u,12*u);lineTo(15*u,5*u);moveTo(8*u,12*u);lineTo(15*u,19*u)};drawPath(p,color,style=stroke) }
+            "DATABASE" -> { drawOval(color,Offset(4*u,3*u),Size(16*u,6*u),style=stroke);drawArc(color,0f,180f,false,Offset(4*u,9*u),Size(16*u,6*u),style=stroke);drawArc(color,0f,180f,false,Offset(4*u,15*u),Size(16*u,6*u),style=stroke);drawLine(color,Offset(4*u,6*u),Offset(4*u,18*u),1.7f*u);drawLine(color,Offset(20*u,6*u),Offset(20*u,18*u),1.7f*u) }
+            "TIMELINE" -> { repeat(3) { val y=(5+7*it)*u;drawCircle(color,1.5f*u,Offset(4*u,y));drawLine(color,Offset(9*u,y),Offset(21*u,y),1.7f*u,StrokeCap.Round) } }
+            "CLOSE" -> { drawLine(color,Offset(6*u,6*u),Offset(18*u,18*u),1.7f*u,StrokeCap.Round);drawLine(color,Offset(18*u,6*u),Offset(6*u,18*u),1.7f*u,StrokeCap.Round) }
+
             "PIN" -> { val p=Path().apply {moveTo(8*u,3*u);lineTo(16*u,3*u);lineTo(15*u,10*u);lineTo(19*u,14*u);lineTo(5*u,14*u);lineTo(9*u,10*u);close();moveTo(12*u,14*u);lineTo(12*u,22*u)};drawPath(p,color,style=stroke) }
             "REFRESH" -> { drawArc(color,40f,280f,false,Offset(4*u,4*u),Size(16*u,16*u),style=stroke);val p=Path().apply {moveTo(20*u,3*u);lineTo(20*u,9*u);lineTo(14*u,9*u)};drawPath(p,color,style=stroke) }
 

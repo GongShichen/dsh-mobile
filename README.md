@@ -1,4 +1,4 @@
-# DSH Mobile
+# Harness Link
 
 使用 Kotlin Multiplatform 与 Compose Multiplatform，在 Android 和 iOS 原生 App 中继续电脑上的 DeepSeek Harness 会话。
 
@@ -20,7 +20,7 @@
 - 会话搜索、新建、改名、置顶、归档、分支与模型选择。
 - 流式消息、思考、工具卡片、审批、问题回复、运行与后台任务状态。
 - 工作区文件浏览、预览、下载；附件分块上传。
-- 按电脑隔离的缓存与离线草稿；不会自动提交未发送草稿。
+- 桌面为唯一业务数据源；手机仅在内存中展示会话、消息、轨迹和操作状态，不保存聊天历史。
 - Mac 直发 APNs/FCM 的最小内容提醒，点击通知重新获取真实状态。
 
 桌面 DSH 是权威数据源。历史与文件按需读取，归档不会删除桌面日志。桌面未发送草稿、滚动位置和任意第三方 React 界面不会变成原生页面。
@@ -139,7 +139,7 @@ DSH_DEVELOPMENT_TEAM=YOURTEAMID scripts/build-ios-device.sh --personal-team --de
 - `core/model`、`core/protocol`：领域模型与版本化帧协议。
 - `core/transport`：统一 P2P 接口及实际平台绑定。
 - `core/sync`：RPC、分域快照与增量合并、重连和操作确认。
-- `core/database`：SQLDelight 缓存与迁移。
+- `core/database`：配对电脑与通知配置；历史会话、消息、草稿和操作状态只留在进程内存。
 - `core/platform`：安全存储、文件、通知和生命周期接口。
 - `third_party/iroh-ffi`：固定官方来源；生成库不提交 Git。
 
@@ -152,3 +152,13 @@ DSH_DEVELOPMENT_TEAM=YOURTEAMID scripts/build-ios-device.sh --personal-team --de
 侧边栏点击会话后立即关闭，再加载桌面会话。工作区采用目录列表，文件页提供面包屑、刷新、预览和下载。发送/停止按钮可见圆形为 36 点，附件加号 16 点；点击区域保持 48 点。
 
 会话顶部显示所属工作区；侧栏收起使用平滑过渡后再加载会话。点击输入框以外的区域可收起键盘。
+
+### 开源应用标识
+
+应用名称为 **Harness Link**，Android application ID / namespace 与 iOS Bundle ID 均为 `org.harnesslink.app`。KMP 内部模块和 `dsh-mobile/1` 传输协议保持其既有技术标识。应用标识变更会被系统视为新安装，需要重新扫码配对；桌面会话仍由同一份 DSH 数据提供。
+
+### 调试与真机测试
+
+Android 日志标签为 `HarnessLink` 和 `HarnessLink-P2P`，记录扫码、连接、确认、订阅和错误码；不记录邀请密钥、令牌或聊天正文。iOS 使用相同的脱敏诊断输出。
+
+对已配置的真机运行应用 UI 测试时，先 `assembleDebugAndroidTest`，再通过 `adb install -r -t` 与 `adb shell am instrument` 直接运行测试。不要对日常使用的安装执行会自动卸载目标 App 的 Gradle connected 测试任务。扫码测试图片是固定虚构数据，只进入测试 APK。

@@ -123,11 +123,20 @@ fun DevicesScreen(state: MobileState, repository: MobileRepository, busy: Boolea
         }
         item { Text("通过端到端加密连接，继续电脑上的会话与工作。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 4.dp)) }
     }
+    if (state.connection in setOf(ConnectionStatus.PAIRING, ConnectionStatus.AWAITING_APPROVAL)) AlertDialog(
+        onDismissRequest = { run { repository.disconnect() } },
+        title = { Text(if (state.connection == ConnectionStatus.AWAITING_APPROVAL) "请在电脑上确认" else "正在连接电脑") },
+        text = { Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            LinearProgressIndicator(Modifier.fillMaxWidth())
+            Text(if (state.connection == ConnectionStatus.AWAITING_APPROVAL) "电脑已收到配对请求，请在移动访问面板确认这台手机。" else "正在建立加密连接，最长等待约 30 秒。", style = MaterialTheme.typography.bodyMedium)
+        } },
+        confirmButton = { TextButton(onClick = { run { repository.disconnect() } }) { Text("取消连接") } },
+    )
     if (manual) AlertDialog(onDismissRequest = { manual = false }, title = { Text("使用配对链接") }, text = {
         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Text("在电脑的移动访问面板复制链接，然后粘贴到这里。", style = MaterialTheme.typography.bodyMedium)
-            OutlinedTextField(name, { name = it }, label = { Text("手机名称") }, singleLine = true, modifier = Modifier.fillMaxWidth().keyboardInputArea(), shape = MaterialTheme.shapes.small)
-            OutlinedTextField(invitation, { invitation = it }, label = { Text("或粘贴配对链接") }, maxLines = 3, modifier = Modifier.fillMaxWidth().keyboardInputArea(), shape = MaterialTheme.shapes.small)
+            OutlinedTextField(name, { name = it }, label = { Text("手机名称") }, singleLine = true, modifier = Modifier.fillMaxWidth().keyboardInputArea("device-name"), shape = MaterialTheme.shapes.small)
+            OutlinedTextField(invitation, { invitation = it }, label = { Text("或粘贴配对链接") }, maxLines = 3, modifier = Modifier.fillMaxWidth().keyboardInputArea("pairing-link"), shape = MaterialTheme.shapes.small)
         }
     }, confirmButton = { TextButton(enabled = invitation.isNotBlank() && !busy, onClick = { val value = invitation; invitation = ""; manual = false; focus.clearFocus(); run { repository.pair(value, name) } }) { Text("连接并等待电脑确认") } }, dismissButton = { TextButton(onClick = { manual = false }) { Text("取消") } })
     forget?.let { host -> AlertDialog(onDismissRequest = { forget = null }, title = { Text("移除 ${host.name}？") }, text = { Text("清除本机保存的电脑入口。电脑端的授权可在“移动访问”中撤销。") }, confirmButton = { TextButton(onClick = { forget = null; run { repository.forgetHost(host.id) } }) { Text("移除") } }, dismissButton = { TextButton(onClick = { forget = null }) { Text("取消") } }) }
@@ -155,9 +164,9 @@ fun SessionsScreen(state: MobileState, repository: MobileRepository, busy: Boole
     val sessions = state.sessions.filter { it.archived == archived && (query.isBlank() || it.title.contains(query, ignoreCase = true) || matches.containsKey(it.id)) }.sortedWith(compareByDescending<SessionSummary> { it.pinned }.thenByDescending { it.updatedAt })
     Column(Modifier.fillMaxSize()) {
         TextField(query, { query = it }, placeholder = { Text("搜索对话", style = MaterialTheme.typography.bodyMedium) }, leadingIcon = { NavigationIcon("SEARCH", 18.dp) }, singleLine = true,
-            textStyle = MaterialTheme.typography.bodyMedium, shape = MaterialTheme.shapes.small,
+            textStyle = MaterialTheme.typography.bodyMedium, shape = RoundedCornerShape(28.dp),
             colors = TextFieldDefaults.colors(focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant, unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant, focusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent, unfocusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent),
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).keyboardInputArea().semantics { contentDescription = "搜索对话" })
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).keyboardInputArea("session-search").semantics { contentDescription = "搜索对话" })
         if (searching) LinearProgressIndicator(Modifier.fillMaxWidth().height(2.dp))
         searchError?.let { Text(it, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(horizontal = 20.dp)) }
         Row(Modifier.fillMaxWidth().padding(start = 24.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -202,7 +211,7 @@ fun SettingsScreen(state: MobileState, repository: MobileRepository, busy: Boole
         } }
         item { SectionCard("当前连接") {
             Text(state.activeHost?.name ?: "尚未连接电脑"); state.activeHost?.dshVersion?.let { Text("DeepSeek Harness $it", style = MaterialTheme.typography.bodySmall) }
-            Text("会话和文件保留在电脑，手机缓存按电脑隔离。", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("会话与文件以电脑端为准，手机不保存聊天历史。", color = MaterialTheme.colorScheme.onSurfaceVariant)
             OutlinedButton(enabled = !busy && state.activeHostId != null, onClick = { run { repository.disconnect() } }) { Text("断开连接") }
         } }
         val unknown = state.operations.filter { it.status == OperationStatus.UNKNOWN }
@@ -210,7 +219,7 @@ fun SettingsScreen(state: MobileState, repository: MobileRepository, busy: Boole
             Text("${operation.method} · ${operation.error.orEmpty()}", style = MaterialTheme.typography.bodySmall)
             if (operation.method == "sessions.prompt") OutlinedButton(enabled = state.connected && !busy, onClick = { run { repository.retryOperation(operation.id) } }) { Text("核对后重试此消息") }
         } } }
-        item { Text("DSH Mobile · 设备之间的原生工作入口", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        item { Text("Harness Link · 设备之间的原生工作入口", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
     }
     if (reset) AlertDialog(onDismissRequest = { reset = false }, title = { Text("重置通知配置？") }, text = { Text("将删除此安装的推送令牌和 Firebase 配置。重置后请重新打开 App 并连接电脑。") }, confirmButton = { TextButton(onClick = { reset = false; run { AppGraph.resetPushConfiguration?.invoke(); permission = "已重置，请重新打开 App。" } }) { Text("重置") } }, dismissButton = { TextButton(onClick = { reset = false }) { Text("取消") } })
 }
