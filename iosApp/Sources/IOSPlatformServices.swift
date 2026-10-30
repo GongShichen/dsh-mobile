@@ -92,7 +92,7 @@ final class IOSPlatformServices: NSObject, NativeUiBridge, @unchecked Sendable {
                         operation.complete {
                             parent.dismiss(animated: true)
                             if let error { callback.failure(message: error.localizedDescription) }
-                            else { callback.success(value: value) }
+                            else { callback.success(value_: value) }
                         }
                     }
                     scanner.modalPresentationStyle = .fullScreen
@@ -238,6 +238,7 @@ private final class QRScannerController: UIViewController, AVCaptureMetadataOutp
     private let session = AVCaptureSession()
     private let queue = DispatchQueue(label: "io.dsh.mobile.camera")
     private var preview: AVCaptureVideoPreviewLayer?
+    private var startupError: Error?
     private var finished = false
     private let completion: (String?, Error?) -> Void
     init(completion: @escaping (String?, Error?) -> Void) { self.completion = completion; super.init(nibName: nil, bundle: nil) }
@@ -267,7 +268,11 @@ private final class QRScannerController: UIViewController, AVCaptureMetadataOutp
             view.layer.insertSublayer(layer, at: 0)
             preview = layer
             queue.async { [session] in session.startRunning() }
-        } catch { finish(nil, error) }
+        } catch { startupError = error }
+    }
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        if let startupError { finish(nil, startupError) }
     }
     override func viewDidLayoutSubviews() { super.viewDidLayoutSubviews(); preview?.frame = view.bounds }
     override func viewDidDisappear(_ animated: Bool) { super.viewDidDisappear(animated); queue.async { [session] in session.stopRunning() } }

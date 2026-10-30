@@ -38,7 +38,7 @@
 | SQLDelight | 2.4.1 |
 | iroh-ffi / iroh | 1.2.0 / 1.4.1 |
 
-Compose 当前依赖要求 compileSdk 37，因此构建 SDK 高于 targetSdk。Xcode 当前验证环境为 26.5；使用 iOS 功能前需完成 Xcode 首次运行与许可设置。
+Compose 当前依赖要求 compileSdk 37，因此构建 SDK 高于 targetSdk。Xcode 当前验证环境为 27.2；使用 iOS 功能前需完成 Xcode 首次运行与许可设置。
 
 ```bash
 git clone --recurse-submodules git@github.com:GongShichen/dsh-mobile.git
@@ -72,6 +72,14 @@ ANDROID_NDK_HOME="$HOME/Library/Android/sdk/ndk/27.0.12077973" scripts/build-iro
 
 ```bash
 scripts/build-ios.sh
+```
+
+该脚本构建 arm64 模拟器版本，并使用本地临时签名，确保系统钥匙串正常工作；不需要使用开发者证书。不要为模拟器传入 `CODE_SIGNING_ALLOWED=NO`，否则持久设备身份会因缺少模拟器权限而无法保存。
+
+模拟器产物位于 `.local/DerivedData/Build/Products/Debug-iphonesimulator/DshMobile.app`。可重复运行原生页面测试：
+
+```bash
+DSH_IOS_SIMULATOR_ID=<模拟器 UUID> scripts/test-ios.sh
 ```
 
 个人签名真机构建需要先在 Xcode 完成许可与账号设置，选择自己的开发者团队，并为目标设备准备有效的开发签名和 provisioning profile。脚本不选择默认 Team、不创建账号或密钥，也不自动更新 provisioning。查看设备标识可运行 `xcrun devicectl list devices`。

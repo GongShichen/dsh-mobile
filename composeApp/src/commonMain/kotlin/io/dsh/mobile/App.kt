@@ -43,7 +43,7 @@ fun App() {
         LaunchedEffect(state.error, uiError) {
             (uiError ?: state.error)?.let { snackbar.showSnackbar(it); uiError = null; repository.clearError() }
         }
-        Scaffold(containerColor = MaterialTheme.colorScheme.background,
+        Scaffold(modifier = Modifier.imePadding(), containerColor = MaterialTheme.colorScheme.background,
             snackbarHost = { SnackbarHost(snackbar) },
             topBar = { TopAppBar(title = { Column {
                 Text(if (chatOpen && tab == MobileTab.CHATS) state.selectedSession?.title ?: "新对话" else "DSH Mobile", maxLines = 1)

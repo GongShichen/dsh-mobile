@@ -10,16 +10,29 @@
 		014A8F39FEE8671469E6319F /* IOSPushService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69CE15A14C86E875125566C9 /* IOSPushService.swift */; };
 		031C2782941CC726BFB8F71B /* iroh-MIT.txt in Resources */ = {isa = PBXBuildFile; fileRef = F3FCA32421C017018FD0AE8B /* iroh-MIT.txt */; };
 		26752A592B82D82540428C79 /* IOSPlatformServices.swift in Sources */ = {isa = PBXBuildFile; fileRef = 972CC6D8D61A86C42DCC8155 /* IOSPlatformServices.swift */; };
+		ACD10B8516DE2E0892864BFC /* DshMobileUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6982C5F3DA0E5D0799ACFAA7 /* DshMobileUITests.swift */; };
 		C21582FC6AAECE8F066A2992 /* IrohLib in Frameworks */ = {isa = PBXBuildFile; productRef = 8AC4094695514B93580C43B9 /* IrohLib */; };
 		E0E04D56026CD22892EA98A6 /* DshMobileApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51DC7570E5B54F6AF003169E /* DshMobileApp.swift */; };
 		E8B6D260518E09E23F30ECC8 /* IrohBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2852DFF0B9EB1ED8B58DA17 /* IrohBridge.swift */; };
 		F2BA4124944FCC707DE47945 /* iroh-Apache-2.0.txt in Resources */ = {isa = PBXBuildFile; fileRef = 1EF5BBE370020F63F7612F3F /* iroh-Apache-2.0.txt */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		D4FB96DB99154B1428247BE7 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 8FE48562BF47241F41866456 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 3595B7447F695E82365002D0;
+			remoteInfo = DshMobile;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		1B767708AEFDFF8F91AE7183 /* DshMobile.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = DshMobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		1EF5BBE370020F63F7612F3F /* iroh-Apache-2.0.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "iroh-Apache-2.0.txt"; sourceTree = "<group>"; };
+		3E1FE6AF2A7FF06C34C8CEC5 /* DshMobileUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = DshMobileUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		51DC7570E5B54F6AF003169E /* DshMobileApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DshMobileApp.swift; sourceTree = "<group>"; };
+		6982C5F3DA0E5D0799ACFAA7 /* DshMobileUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DshMobileUITests.swift; sourceTree = "<group>"; };
 		69CE15A14C86E875125566C9 /* IOSPushService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSPushService.swift; sourceTree = "<group>"; };
 		972CC6D8D61A86C42DCC8155 /* IOSPlatformServices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSPlatformServices.swift; sourceTree = "<group>"; };
 		D2852DFF0B9EB1ED8B58DA17 /* IrohBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IrohBridge.swift; sourceTree = "<group>"; };
@@ -52,8 +65,17 @@
 			children = (
 				C6E0AADF6D983C99F95267D6 /* Resources */,
 				8270190234B078EAF2AA3C24 /* Sources */,
+				67E27E6264FE8AF7D5E4A64B /* Tests */,
 				91A00150D7340B128C808A95 /* Products */,
 			);
+			sourceTree = "<group>";
+		};
+		67E27E6264FE8AF7D5E4A64B /* Tests */ = {
+			isa = PBXGroup;
+			children = (
+				6982C5F3DA0E5D0799ACFAA7 /* DshMobileUITests.swift */,
+			);
+			path = Tests;
 			sourceTree = "<group>";
 		};
 		8270190234B078EAF2AA3C24 /* Sources */ = {
@@ -71,6 +93,7 @@
 			isa = PBXGroup;
 			children = (
 				1B767708AEFDFF8F91AE7183 /* DshMobile.app */,
+				3E1FE6AF2A7FF06C34C8CEC5 /* DshMobileUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -107,6 +130,24 @@
 			productReference = 1B767708AEFDFF8F91AE7183 /* DshMobile.app */;
 			productType = "com.apple.product-type.application";
 		};
+		772354EC9FE5F812486E72E8 /* DshMobileUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = EEB21384731D2DC3CA182D0E /* Build configuration list for PBXNativeTarget "DshMobileUITests" */;
+			buildPhases = (
+				210B56746B60E0773399326A /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				7E00D1540CA8726236C4646C /* PBXTargetDependency */,
+			);
+			name = DshMobileUITests;
+			packageProductDependencies = (
+			);
+			productName = DshMobileUITests;
+			productReference = 3E1FE6AF2A7FF06C34C8CEC5 /* DshMobileUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -114,11 +155,16 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
-				LastUpgradeCheck = 2650;
+				LastUpgradeCheck = 2720;
 				TargetAttributes = {
 					3595B7447F695E82365002D0 = {
 						DevelopmentTeam = "$(DSH_DEVELOPMENT_TEAM)";
 						ProvisioningStyle = Automatic;
+					};
+					772354EC9FE5F812486E72E8 = {
+						DevelopmentTeam = "$(DSH_DEVELOPMENT_TEAM)";
+						ProvisioningStyle = Automatic;
+						TestTargetID = 3595B7447F695E82365002D0;
 					};
 				};
 			};
@@ -140,6 +186,7 @@
 			projectRoot = "";
 			targets = (
 				3595B7447F695E82365002D0 /* DshMobile */,
+				772354EC9FE5F812486E72E8 /* DshMobileUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -179,6 +226,14 @@
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		210B56746B60E0773399326A /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				ACD10B8516DE2E0892864BFC /* DshMobileUITests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		BC2EC885BD714139739F2591 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -191,6 +246,14 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		7E00D1540CA8726236C4646C /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 3595B7447F695E82365002D0 /* DshMobile */;
+			targetProxy = D4FB96DB99154B1428247BE7 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		22DFE131DB431B96BC3DD726 /* Release */ = {
@@ -216,6 +279,7 @@
 					"-lsqlite3",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = io.github.gongshichen.dshmobile;
+				PRODUCT_MODULE_NAME = DshMobileApp;
 				PRODUCT_NAME = DshMobile;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -245,6 +309,7 @@
 					"-lsqlite3",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = io.github.gongshichen.dshmobile;
+				PRODUCT_MODULE_NAME = DshMobileApp;
 				PRODUCT_NAME = DshMobile;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -256,6 +321,7 @@
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				APS_ENVIRONMENT = development;
+				"ARCHS[sdk=iphonesimulator*]" = arm64;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
@@ -285,6 +351,7 @@
 				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				"CODE_SIGN_IDENTITY[sdk=iphonesimulator*]" = "-";
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = dwarf;
@@ -318,11 +385,29 @@
 			};
 			name = Debug;
 		};
+		DC1DA1D78E882D66609703D7 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = io.github.gongshichen.dshmobile.uitests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = DshMobile;
+			};
+			name = Release;
+		};
 		E1585B3029EE410881B46E1E /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				APS_ENVIRONMENT = production;
+				"ARCHS[sdk=iphonesimulator*]" = arm64;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
@@ -352,6 +437,7 @@
 				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				"CODE_SIGN_IDENTITY[sdk=iphonesimulator*]" = "-";
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
@@ -378,6 +464,23 @@
 			};
 			name = Release;
 		};
+		FEAD3E7A7358C060BE1439C9 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = io.github.gongshichen.dshmobile.uitests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = DshMobile;
+			};
+			name = Debug;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -395,6 +498,15 @@
 			buildConfigurations = (
 				90DA63C129A0350EB7561FAC /* Debug */,
 				22DFE131DB431B96BC3DD726 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		EEB21384731D2DC3CA182D0E /* Build configuration list for PBXNativeTarget "DshMobileUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				FEAD3E7A7358C060BE1439C9 /* Debug */,
+				DC1DA1D78E882D66609703D7 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

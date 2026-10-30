@@ -9,6 +9,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.dsh.mobile.AppGraph
@@ -38,6 +39,7 @@ internal fun SectionCard(title: String, content: @Composable ColumnScope.() -> U
 
 @Composable
 fun DevicesScreen(state: MobileState, repository: MobileRepository, busy: Boolean, run: RunAction) {
+    val focus = LocalFocusManager.current
     var invitation by remember { mutableStateOf("") }
     var name by remember { mutableStateOf("我的手机") }
     var forget by remember { mutableStateOf<DesktopHost?>(null) }
@@ -47,7 +49,7 @@ fun DevicesScreen(state: MobileState, repository: MobileRepository, busy: Boolea
             OutlinedTextField(name, { name = it }, label = { Text("手机名称") }, singleLine = true, modifier = Modifier.fillMaxWidth())
             Button(enabled = !busy && AppGraph.scanner != null, onClick = { run { AppGraph.scanner?.scan()?.let { repository.pair(it, name) } } }, modifier = Modifier.fillMaxWidth()) { Text("扫描配对二维码") }
             OutlinedTextField(invitation, { invitation = it }, label = { Text("或粘贴配对链接") }, maxLines = 3, modifier = Modifier.fillMaxWidth())
-            OutlinedButton(enabled = invitation.isNotBlank() && !busy, onClick = { val value = invitation; invitation = ""; run { repository.pair(value, name) } }, modifier = Modifier.fillMaxWidth()) { Text("连接并等待电脑确认") }
+            OutlinedButton(enabled = invitation.isNotBlank() && !busy, onClick = { val value = invitation; invitation = ""; focus.clearFocus(); run { repository.pair(value, name) } }, modifier = Modifier.fillMaxWidth()) { Text("连接并等待电脑确认") }
             if (state.connection == ConnectionStatus.AWAITING_APPROVAL) Text("配对请求已发送，请在电脑上核对手机名称并允许。", color = MaterialTheme.colorScheme.primary)
             if (state.connection == ConnectionStatus.PAIRING || state.connection == ConnectionStatus.AWAITING_APPROVAL) TextButton(onClick = { run { repository.disconnect() } }) { Text("取消配对") }
         } }

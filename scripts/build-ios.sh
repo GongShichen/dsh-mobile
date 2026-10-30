@@ -8,4 +8,4 @@ fi
 xcodegen generate --spec iosApp/project.yml
 xcodebuild -project iosApp/DshMobile.xcodeproj -scheme DshMobile \
     -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
-    -derivedDataPath .local/DerivedData CODE_SIGNING_ALLOWED=NO "$@"
+    -derivedDataPath .local/DerivedData CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= ARCHS=arm64 "$@"
