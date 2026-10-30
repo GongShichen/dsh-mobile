@@ -2,6 +2,11 @@ package io.dsh.mobile.features
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -15,6 +20,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import io.dsh.mobile.design.keyboardInputArea
 import io.dsh.mobile.AppGraph
 import io.dsh.mobile.model.MobileState
 import io.dsh.mobile.sync.MobileRepository
@@ -24,6 +30,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.*
 import org.jetbrains.compose.resources.decodeToImageBitmap
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WorkspacesScreen(state: MobileState, repository: MobileRepository, busy: Boolean, run: RunAction, openChat: () -> Unit) {
     var tab by remember { mutableStateOf(0) }
@@ -31,31 +38,55 @@ fun WorkspacesScreen(state: MobileState, repository: MobileRepository, busy: Boo
     var path by remember { mutableStateOf("") }
     var rename by remember { mutableStateOf<JsonObject?>(null) }
     var title by remember { mutableStateOf("") }
+    var expandedWorkspace by remember { mutableStateOf<String?>(null) }
     Column(Modifier.fillMaxSize()) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf("工作区", "文件", "后台任务").forEachIndexed { index, label -> FilterChip(selected = tab == index, onClick = { tab = index }, label = { Text(label) }) }
+        TabRow(selectedTabIndex = tab, containerColor = MaterialTheme.colorScheme.background, divider = {}) {
+            listOf("工作区", "文件", "任务").forEachIndexed { index, label ->
+                Tab(selected = tab == index, onClick = { tab = index }, selectedContentColor = MaterialTheme.colorScheme.primary, unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant, text = { Text(label, style = MaterialTheme.typography.bodyMedium) })
+            }
         }
         when (tab) {
-            0 -> LazyColumn(contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                item { OutlinedButton(enabled = state.connected && !busy, onClick = { adding = true }, modifier = Modifier.fillMaxWidth()) { Text("添加电脑上的工作区") } }
-                if (state.workspaces.isEmpty()) item { Text(if (state.connected) "还没有工作区。选择电脑中的文件夹开始。" else "连接电脑后查看工作区。") }
+            0 -> LazyColumn(contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp)) {
+                item { Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text("电脑上的工作区", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+                    IconButton(enabled = state.connected && !busy, onClick = { adding = true }, modifier = Modifier.semantics { contentDescription = "添加电脑上的工作区" }) { NavigationIcon("PLUS", 20.dp) }
+                } }
+                if (state.workspaces.isEmpty()) item { Text(if (state.connected) "还没有工作区，添加电脑中的文件夹开始。" else "连接电脑后查看工作区。", Modifier.padding(vertical = 24.dp), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                 items(state.workspaces) { workspace ->
                     val id = workspace.string("workspaceId") ?: workspace.string("id").orEmpty()
-                    SectionCard(workspace.string("title") ?: workspace.string("path") ?: "工作区") {
-                        Text(workspace.string("path").orEmpty(), style = MaterialTheme.typography.bodySmall)
-                        val sessions = state.sessions.filter { it.workspaceId == id || workspace.array("sessionIds").any { value -> (value as? JsonPrimitive)?.contentOrNull == it.id } }
-                        Text("${sessions.size} 段对话", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        sessions.take(8).forEach { session -> TextButton(onClick = { run { repository.selectSession(session.id); openChat() } }) { Text(session.title.ifBlank { "未命名对话" }, maxLines = 1) } }
+                    val folderPath = workspace.string("path").orEmpty()
+                    val label = workspace.string("title")?.takeIf { it.isNotBlank() } ?: folderPath.substringAfterLast('/').ifBlank { "工作区" }
+                    val sessions = state.sessions.filter { session -> session.workspaceId == id || workspace.array("sessionIds").any { (it as? JsonPrimitive)?.contentOrNull == session.id } }
+                    val expanded = expandedWorkspace == id
+                    var menu by remember { mutableStateOf(false) }
+                    Row(Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small).clickable { expandedWorkspace = if (expanded) null else id }.padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.primary) { NavigationIcon("WORKSPACES", 24.dp) }
+                        Column(Modifier.weight(1f).padding(start = 14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(label, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(if (folderPath.isNotBlank()) folderPath else "${sessions.size} 段对话", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                        Box {
+                            IconButton(onClick = { menu = true }, modifier = Modifier.semantics { contentDescription = "$label 的操作" }) { NavigationIcon("MORE", 18.dp) }
+                            DropdownMenu(menu, onDismissRequest = { menu = false }) {
+                                DropdownMenuItem(text = { Text("重命名") }, enabled = state.connected && id.isNotBlank(), onClick = { menu = false; title = workspace.string("title").orEmpty(); rename = workspace })
+                            }
+                        }
+                    }
+                    if (expanded) Column(Modifier.padding(start = 38.dp, bottom = 12.dp)) {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             TextButton(enabled = state.connected && !busy && id.isNotBlank(), onClick = { run {
                                 val created = repository.call("sessions.create", parameters("workspaceId" to id)).jsonObject
-                                repository.refreshSessions()
-                                created.string("sessionId")?.let { repository.selectSession(it); openChat() }
-                            } }) { Text("新对话") }
-                            TextButton(enabled = state.connected && id.isNotBlank(), onClick = { title = workspace.string("title").orEmpty(); rename = workspace }) { Text("重命名") }
-                            TextButton(enabled = sessions.isNotEmpty(), onClick = { run { repository.selectSession(sessions.first().id); tab = 1 } }) { Text("浏览文件") }
+                                repository.refreshSessions(); created.string("sessionId")?.let { repository.selectSession(it); openChat() }
+                            } }) { NavigationIcon("NEW_CHAT", 16.dp); Spacer(Modifier.width(6.dp)); Text("新对话") }
+                            TextButton(enabled = sessions.isNotEmpty() && state.connected && !busy, onClick = { run { repository.selectSession(sessions.first().id); tab = 1 } }) { NavigationIcon("FILE", 16.dp); Spacer(Modifier.width(6.dp)); Text("浏览文件") }
                         }
+                        if (sessions.isEmpty()) Text("创建对话后即可浏览文件", Modifier.padding(vertical = 8.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        sessions.take(8).forEach { session -> Row(Modifier.fillMaxWidth().clickable { openChat(); run { repository.selectSession(session.id) } }.heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text(session.title.ifBlank { "未命名对话" }, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                            CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurfaceVariant) { NavigationIcon("RIGHT", 14.dp) }
+                        } }
                     }
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .5f))
                 }
             }
             1 -> key(state.activeHostId, state.selectedSessionId) { FileBrowser(state, repository, busy, run) }
@@ -72,8 +103,8 @@ fun WorkspacesScreen(state: MobileState, repository: MobileRepository, busy: Boo
             }
         }
     }
-    if (adding) AlertDialog(onDismissRequest = { adding = false }, title = { Text("添加工作区") }, text = { Column { Text("输入电脑上的文件夹完整路径。"); OutlinedTextField(path, { path = it }, label = { Text("电脑文件夹路径") }) } }, confirmButton = { TextButton(enabled = path.isNotBlank(), onClick = { adding = false; run { repository.call("workspaces.create", parameters("path" to path)) } }) { Text("添加") } }, dismissButton = { TextButton(onClick = { adding = false }) { Text("取消") } })
-    rename?.let { workspace -> AlertDialog(onDismissRequest = { rename = null }, title = { Text("重命名工作区") }, text = { OutlinedTextField(title, { title = it }, singleLine = true) }, confirmButton = { TextButton(enabled = title.isNotBlank(), onClick = { rename = null; run { repository.call("workspaces.rename", parameters("workspaceId" to (workspace.string("workspaceId") ?: workspace.string("id").orEmpty()), "title" to title)) } }) { Text("保存") } }, dismissButton = { TextButton(onClick = { rename = null }) { Text("取消") } }) }
+    if (adding) AlertDialog(onDismissRequest = { adding = false }, title = { Text("添加工作区") }, text = { Column { Text("输入电脑上的文件夹完整路径。"); OutlinedTextField(path, { path = it }, label = { Text("电脑文件夹路径") }, modifier = Modifier.keyboardInputArea()) } }, confirmButton = { TextButton(enabled = path.isNotBlank(), onClick = { adding = false; run { repository.call("workspaces.create", parameters("path" to path)) } }) { Text("添加") } }, dismissButton = { TextButton(onClick = { adding = false }) { Text("取消") } })
+    rename?.let { workspace -> AlertDialog(onDismissRequest = { rename = null }, title = { Text("重命名工作区") }, text = { OutlinedTextField(title, { title = it }, singleLine = true, modifier = Modifier.keyboardInputArea()) }, confirmButton = { TextButton(enabled = title.isNotBlank(), onClick = { rename = null; run { repository.call("workspaces.rename", parameters("workspaceId" to (workspace.string("workspaceId") ?: workspace.string("id").orEmpty()), "title" to title)) } }) { Text("保存") } }, dismissButton = { TextButton(onClick = { rename = null }) { Text("取消") } }) }
 }
 
 @Composable
@@ -84,11 +115,12 @@ private fun FileBrowser(state: MobileState, repository: MobileRepository, busy: 
     var entries by remember { mutableStateOf<List<JsonObject>>(emptyList()) }
     var error by remember { mutableStateOf<String?>(null) }
     var loading by remember { mutableStateOf(false) }
+    var refresh by remember { mutableStateOf(0) }
     var truncated by remember { mutableStateOf(false) }
     var preview by remember { mutableStateOf<JsonObject?>(null) }
     var imagePreview by remember { mutableStateOf<ImageBitmap?>(null) }
     var previewPath by remember { mutableStateOf("") }
-    LaunchedEffect(path, state.connected) {
+    LaunchedEffect(path, state.connected, refresh) {
         if (!state.connected) return@LaunchedEffect
         loading = true; error = null
         try {
@@ -99,19 +131,26 @@ private fun FileBrowser(state: MobileState, repository: MobileRepository, busy: 
         finally { loading = false }
     }
     Column(Modifier.fillMaxSize()) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-            TextButton(enabled = path.isNotEmpty(), onClick = { path = path.substringBeforeLast('/', "") }) { Text("上一级") }
-            Text(path.ifBlank { "工作区根目录" }, maxLines = 2, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
+        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = { path = "" }) { NavigationIcon("WORKSPACES", 16.dp); Spacer(Modifier.width(6.dp)); Text("根目录", style = MaterialTheme.typography.bodyMedium) }
+                val segments = path.split('/').filter { it.isNotEmpty() }
+                segments.forEachIndexed { index, segment ->
+                    CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurfaceVariant) { NavigationIcon("RIGHT", 12.dp) }
+                    TextButton(onClick = { path = segments.take(index + 1).joinToString("/") }) { Text(segment, style = MaterialTheme.typography.bodyMedium) }
+                }
+            }
+            IconButton(enabled = state.connected && !loading, onClick = { refresh++ }, modifier = Modifier.semantics { contentDescription = "刷新文件列表" }) { NavigationIcon("REFRESH", 18.dp) }
         }
         if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
         error?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(20.dp)) }
         LazyColumn(contentPadding = PaddingValues(12.dp)) {
             if (entries.isEmpty() && !loading && error == null) item { Text("文件夹为空", modifier = Modifier.padding(16.dp)) }
-            items(entries) { entry ->
+            items(entries.sortedWith(compareByDescending<JsonObject> { it.string("type") == "directory" }.thenBy { it.string("name")?.lowercase() })) { entry ->
                 val name = entry.string("name").orEmpty()
                 val directory = entry.string("type") == "directory"
                 val childPath = if (path.isBlank()) name else "$path/$name"
-                ListItem(headlineContent = { Text(name) }, supportingContent = { Text(if (directory) "文件夹" else entry["size"]?.let { "$it 字节" }.orEmpty()) }, leadingContent = { Text(if (directory) "▤" else "▧") }, modifier = Modifier.clickable(enabled = state.connected && !busy) {
+                ListItem(headlineContent = { Text(name, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis) }, supportingContent = { Text(if (directory) "文件夹" else fileSize((entry["size"] as? JsonPrimitive)?.longOrNull), style = MaterialTheme.typography.bodySmall) }, colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.background), leadingContent = { CompositionLocalProvider(LocalContentColor provides if (directory) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant) { NavigationIcon(if (directory) "WORKSPACES" else "FILE", 22.dp) } }, modifier = Modifier.clickable(enabled = state.connected && !busy) {
                     if (directory) path = childPath
                     else run {
                         previewPath = childPath; preview = null; imagePreview = null
@@ -120,7 +159,7 @@ private fun FileBrowser(state: MobileState, repository: MobileRepository, busy: 
                             imagePreview = withContext(Dispatchers.Default) { bytes.decodeToImageBitmap() }
                         } else preview = repository.call("files.read", buildJsonObject { put("sessionId", sessionId); put("path", childPath); put("range", buildJsonObject { put("offset", 1); put("limit", 200) }) }).jsonObject
                     }
-                }, trailingContent = { if (!directory) TextButton(enabled = state.connected && !busy && AppGraph.saveFile != null, onClick = { run { download(repository, sessionId, childPath) } }) { Text("下载") } })
+                }, trailingContent = { if (directory) NavigationIcon("RIGHT", 14.dp) else IconButton(enabled = state.connected && !busy && AppGraph.saveFile != null, onClick = { run { download(repository, sessionId, childPath) } }, modifier = Modifier.semantics { contentDescription = "下载 $name" }) { NavigationIcon("DOWNLOAD", 18.dp) } })
             }
             if (truncated) item { Text("目录条目较多，当前列表已达到电脑端返回上限。", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(16.dp)) }
         }
@@ -158,4 +197,11 @@ private suspend fun downloadBytes(repository: MobileRepository, sessionId: Strin
     val output = ByteArray(length); var offset = 0
     chunks.forEach { it.copyInto(output, offset); offset += it.size }
     return output
+}
+
+private fun fileSize(size: Long?): String = when {
+    size == null -> "文件"
+    size < 1024 -> "$size B"
+    size < 1024 * 1024 -> "${size / 1024} KB"
+    else -> "${size / (1024 * 1024)} MB"
 }

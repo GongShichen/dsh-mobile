@@ -115,6 +115,22 @@ xcrun devicectl device install app --device YOUR_DEVICE_ID \
 
 第一组是协议和状态合并测试；第二组需要模拟器或设备，使用真实 Android JNI/QUIC 而非假传输。iOS Kotlin 编译与最终 Xcode 链接是不同验证步骤，结果记录在 [验证说明](docs/VALIDATION.md)。
 
+## 移动界面
+
+以 DeepSeek 移动端的对话界面为参考：侧边抽屉管理历史会话，底部统一输入框。消息正文使用原生 GFM 渲染，支持列表、引用、链接、表格、代码复制；思考与工具使用中性色折叠行，流式思考和正文分别合并。
+
+输入框下方的模型与**思考强度**采用单行水平布局，分别点击各自控件选择。档位来自桌面模型目录；当前选择来自 DSH 的 `modelSelection` 投影，桌面修改后手机同步更新。没有思考档位的模型不会出现虚构选项。
+
+iOS 26 及以上使用系统原生 Liquid Glass 导航和发送按钮；低版本或开启“降低透明度”时使用系统实色控件。设计规范见 [界面规范](design-system/dsh-mobile/MASTER.md)。
+
+免费 Personal Team 测试可使用：
+
+```bash
+DSH_DEVELOPMENT_TEAM=YOURTEAMID scripts/build-ios-device.sh --personal-team --device YOUR_DEVICE_ID --install
+```
+
+此构建保留 P2P 和聊天，明确关闭免费团队不支持的 APNs 权限。`DSH_IOS_DERIVED_DATA` 可指向已有的构建缓存目录。
+
 ## 目录
 
 - `androidApp`：Android 壳、扫码/文件选择、Keystore 初始化、FCM 与通知。
@@ -128,3 +144,11 @@ xcrun devicectl device install app --device YOUR_DEVICE_ID \
 - `third_party/iroh-ffi`：固定官方来源；生成库不提交 Git。
 
 无独立服务端目录。与桌面的协议定义由插件仓库 `protocol/PROTOCOL.md` 维护。所有密钥、用户数据和签名文件保存在仓库外，构建与测试不读取用户模型密钥。
+
+### 附件与图库
+
+输入框左下方加号提供“照片图库”和“选择文件”。iOS 使用系统 PHPicker，Android 使用系统 Photo Picker（不可用时由 AndroidX 回退到图片文件选择）；仅接收用户选定的图片。图库一次最多选择 10 张，iOS 的 HEIC/HEIF 在需要时转为 JPEG 后上传。附件通过现有加密分块上传及 receipt 流程发送，取消选择不会创建新会话。
+
+侧边栏点击会话后立即关闭，再加载桌面会话。工作区采用目录列表，文件页提供面包屑、刷新、预览和下载。发送/停止按钮可见圆形为 36 点，附件加号 16 点；点击区域保持 48 点。
+
+会话顶部显示所属工作区；侧栏收起使用平滑过渡后再加载会话。点击输入框以外的区域可收起键盘。

@@ -57,6 +57,110 @@ final class DshMobileUITests: XCTestCase {
         attachScreenshot("scanner-returned")
     }
 
+    /// Uses the real deterministic DSH fixture session on the paired, isolated QA host.
+    func testOptionalReasoningDisclosure() throws {
+        guard ProcessInfo.processInfo.environment["DSH_UI_PRESENTATION"] == "1" else {
+            throw XCTSkip("Prepare the isolated DSH fixture and set DSH_UI_PRESENTATION=1")
+        }
+        tapLabel("菜单")
+        let session = app.staticTexts.matching(NSPredicate(format: "label == %@", "Mobile smoke session")).firstMatch
+        XCTAssertTrue(session.waitForExistence(timeout: 20))
+        session.tap()
+        let answer = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Mobile round trip verified.")).firstMatch
+        XCTAssertTrue(answer.waitForExistence(timeout: 20))
+        let thoughts = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "思考"))
+        XCTAssertTrue(thoughts.firstMatch.waitForExistence(timeout: 10))
+        attachScreenshot("conversation-collapsed")
+        thoughts.firstMatch.tap()
+        let body = app.staticTexts.matching(NSPredicate(format: "label == %@", "Checking the mobile approval and tool flow.")).firstMatch
+        XCTAssertTrue(body.waitForExistence(timeout: 5))
+        attachScreenshot("conversation-expanded")
+        thoughts.firstMatch.tap()
+        // The collapsed preview may contain the same text as a one-line reasoning body.
+        XCTAssertEqual(thoughts.firstMatch.value as? String, "已收起")
+        XCTAssertTrue(answer.exists, "Reasoning disclosure must not remove the final answer")
+    }
+
+    func testOptionalRichConversationAndEffort() throws {
+        guard ProcessInfo.processInfo.environment["DSH_UI_PRESENTATION"] == "1" else { throw XCTSkip("Prepare the isolated rich conversation fixture") }
+        tapLabel("菜单")
+        let session = app.staticTexts["对话排版验证"]
+        XCTAssertTrue(session.waitForExistence(timeout: 20))
+        session.tap()
+        XCTAssertTrue(element("复制代码").waitForExistence(timeout: 20))
+        attachScreenshot("conversation-rich-text")
+        app.swipeDown()
+        attachScreenshot("conversation-process")
+        let effortPicker = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "思考强度")).firstMatch
+        XCTAssertTrue(effortPicker.waitForExistence(timeout: 10))
+        effortPicker.tap()
+        attachScreenshot("model-reasoning-before-selection")
+        let maximum = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Max")).firstMatch
+        XCTAssertTrue(maximum.waitForExistence(timeout: 10))
+        maximum.tap()
+        let accepted = app.buttons.matching(NSPredicate(format: "label CONTAINS %@ AND label CONTAINS %@", "思考强度", "Max")).firstMatch
+        XCTAssertTrue(accepted.waitForExistence(timeout: 10), "Accepted effort must come back through the desktop projection")
+        attachScreenshot("horizontal-model-and-effort")
+
+    }
+
+    func testOptionalSidebarWorkspaceAndPhotos() throws {
+        guard ProcessInfo.processInfo.environment["DSH_UI_PRESENTATION"] == "1" else { throw XCTSkip("Requires the isolated paired host") }
+        tapLabel("菜单")
+        let opened = XCTNSPredicateExpectation(predicate: NSPredicate(format: "hittable == true"), object: element("收起菜单"))
+        XCTAssertEqual(XCTWaiter.wait(for: [opened], timeout: 5), .completed)
+        attachScreenshot("sidebar-final")
+        let session = app.staticTexts["对话排版验证"]
+        XCTAssertTrue(session.waitForExistence(timeout: 10))
+        session.tap()
+        XCTAssertTrue(app.buttons["菜单"].waitForExistence(timeout: 5))
+        let closeButton = element("收起菜单")
+        let closed = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in !closeButton.exists || closeButton.frame.maxX <= 0 }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [closed], timeout: 5), .completed, "Selecting a conversation must dismiss the drawer")
+        tapLabel("工作区")
+        XCTAssertTrue(element("添加电脑上的工作区").waitForExistence(timeout: 10))
+        attachScreenshot("workspaces-final")
+        tapLabel("文件")
+        XCTAssertTrue(element("hello.txt").waitForExistence(timeout: 10))
+        attachScreenshot("files-final")
+        tapLabel("返回")
+        tapLabel("附件")
+        XCTAssertTrue(element("照片图库").waitForExistence(timeout: 5))
+        XCTAssertTrue(element("选择文件").exists)
+        attachScreenshot("attachment-menu")
+        tapLabel("照片图库")
+        let photo = app.images.matching(NSPredicate(format: "identifier == %@ AND label BEGINSWITH %@", "PXGGridLayout-Info", "截屏")).firstMatch
+        XCTAssertTrue(photo.waitForExistence(timeout: 15), "The system Photos picker must open with the simulator fixture image")
+        attachScreenshot("system-photo-picker")
+        // Photos uses a custom grid whose image AX nodes have no activation point.
+        photo.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        let add = app.buttons.matching(NSPredicate(format: "label IN %@", ["完成", "Done", "添加", "Add"])).firstMatch
+        XCTAssertTrue(add.waitForExistence(timeout: 5))
+        add.tap()
+        XCTAssertTrue(element("移除").waitForExistence(timeout: 30), "Selected photo must upload and become a removable attachment")
+        attachScreenshot("photo-attached")
+        tapLabel("移除")
+    }
+
+    func testOptionalKeyboardDismissalAndWorkspaceHeader() throws {
+        guard ProcessInfo.processInfo.environment["DSH_UI_PRESENTATION"] == "1" else { throw XCTSkip("Requires the isolated paired host") }
+        tapLabel("菜单")
+        let session = app.staticTexts["对话排版验证"]
+        XCTAssertTrue(session.waitForExistence(timeout: 10))
+        session.tap()
+        XCTAssertTrue(app.staticTexts["workspace"].waitForExistence(timeout: 10))
+        let connectionSubtitle = app.staticTexts.matching(NSPredicate(format: "label == %@", "Mac · 直连"))
+        XCTAssertEqual(connectionSubtitle.count, 0)
+        let input = app.textViews.matching(NSPredicate(format: "label CONTAINS %@", "消息输入")).firstMatch
+        XCTAssertTrue(input.waitForExistence(timeout: 10))
+        input.tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
+        app.staticTexts["对话排版验证"].tap()
+        let hidden = XCTNSPredicateExpectation(predicate: NSPredicate { [weak self] _, _ in self?.app.keyboards.count == 0 }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [hidden], timeout: 5), .completed)
+        attachScreenshot("workspace-header-keyboard-dismissed")
+    }
+
     /// Opt in after placing a short-lived invitation on this simulator's pasteboard with simctl pbcopy.
     /// The test never reads or logs the invitation and never uses typeText for credential-bearing text.
     func testOptionalPairFromPasteboardAndCreateConversation() throws {
@@ -64,6 +168,7 @@ final class DshMobileUITests: XCTestCase {
             throw XCTSkip("Set DSH_UI_PAIRING=1 and prepare the simulator pasteboard to run live pairing")
         }
         tapLabel("设备")
+        tapLabel("或粘贴配对链接")
         let field = app.descendants(matching: .any).matching(
             NSPredicate(format: "(elementType == %d OR elementType == %d) AND label CONTAINS %@",
                 XCUIElement.ElementType.textField.rawValue, XCUIElement.ElementType.textView.rawValue,
@@ -117,7 +222,6 @@ final class DshMobileUITests: XCTestCase {
         XCTAssertEqual(outcome, .completed, "Approve the displayed pairing request on the desktop")
         XCTAssertTrue(connected.exists, "The desktop must confirm the authenticated connection")
         returnToTabsIfNeeded()
-        tapLabel("对话")
         tapLabel("新对话")
         XCTAssertTrue(element("继续你的想法").waitForExistence(timeout: 20), "The desktop must create and select a real conversation")
         XCTAssertTrue(element("发送").exists)
@@ -131,6 +235,12 @@ final class DshMobileUITests: XCTestCase {
     }
 
     private func tapLabel(_ label: String) {
+        if ["设备", "设置", "工作区"].contains(label), !element(label).isHittable {
+            if app.buttons["返回"].exists { app.buttons["返回"].tap() }
+            let menu = app.buttons["菜单"]
+            XCTAssertTrue(menu.waitForExistence(timeout: 10))
+            menu.tap()
+        }
         let target = element(label)
         XCTAssertTrue(target.waitForExistence(timeout: 10), "Missing UI control: \(label)")
         target.tap()

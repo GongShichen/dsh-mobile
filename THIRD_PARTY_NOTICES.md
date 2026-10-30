@@ -6,6 +6,7 @@ This project's MIT license applies to its original source. Dependencies retain t
 - **Kotlin, Compose Multiplatform, Coroutines, kotlinx.serialization**, JetBrains and contributors: Apache-2.0.
 - **AndroidX, Firebase Android SDK**, Google and contributors: Apache-2.0.
 - **SQLDelight**, SQLDelight contributors: Apache-2.0.
+- **Multiplatform Markdown Renderer**, Mike Penz, and **JetBrains Markdown**: Apache-2.0. Native GFM rendering and parsing; pinned renderer 0.46.0.
 - **JNA**, JNA contributors: LGPL-2.1-or-later OR Apache-2.0; used under Apache-2.0.
 - **ZXing Android Embedded**, JourneyApps: Apache-2.0.
 

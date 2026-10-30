@@ -11,13 +11,16 @@ Required environment:
 Optional environment:
   DSH_IOS_DEVICE_ID       Explicit devicectl device identifier for --install.
   DSH_IOS_BUNDLE_ID       Override the bundle ID (default: io.github.gongshichen.dshmobile).
+  DSH_IOS_DERIVED_DATA    Reuse an existing DerivedData/package cache directory.
 
 Usage:
-  scripts/build-ios-device.sh [--device ID] [--archive] [--export-ipa] [--install]
+  scripts/build-ios-device.sh [--personal-team] [--device ID] [--archive] [--export-ipa] [--install]
 
 --archive     Create a Debug, development-signed .xcarchive.
 --export-ipa  Also export a development IPA with Xcode's debugging export method.
 --install     Install the built .app with devicectl; requires an explicit device ID.
+--personal-team  Build without the APNs entitlement for free Personal Team testing.
+                 P2P stays enabled; notification setup reports that signing lacks remote push.
 
 This script does not accept Xcode licenses, log in to Apple, create signing keys,
 or enable automatic provisioning updates. Configure signing in Xcode first.
@@ -28,6 +31,7 @@ device_id="${DSH_IOS_DEVICE_ID:-}"
 archive_app=false
 export_ipa=false
 install_app=false
+personal_team=false
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --device)
@@ -38,6 +42,7 @@ while [[ $# -gt 0 ]]; do
         --archive) archive_app=true; shift ;;
         --export-ipa) archive_app=true; export_ipa=true; shift ;;
         --install) install_app=true; shift ;;
+        --personal-team) personal_team=true; shift ;;
         -h|--help) usage; exit 0 ;;
         *) printf 'Unknown argument: %s\n' "$1" >&2; usage >&2; exit 2 ;;
     esac
@@ -56,7 +61,9 @@ xcodebuild -checkFirstLaunchStatus
 xcodegen generate --spec iosApp/project.yml
 
 output_dir="$PWD/.local/ios-device"
-derived_data="$output_dir/DerivedData"
+push_enabled=YES
+if $personal_team; then output_dir="$PWD/.local/ios-device-personal"; push_enabled=NO; fi
+derived_data="${DSH_IOS_DERIVED_DATA:-$output_dir/DerivedData}"
 archive_path="$output_dir/DshMobile.xcarchive"
 mkdir -p "$output_dir"
 destination='generic/platform=iOS'
@@ -69,7 +76,11 @@ build_args=(
     "DSH_DEVELOPMENT_TEAM=$team_id" "DEVELOPMENT_TEAM=$team_id"
     "PRODUCT_BUNDLE_IDENTIFIER=$bundle_id"
     CODE_SIGN_STYLE=Automatic CODE_SIGNING_ALLOWED=YES APS_ENVIRONMENT=development
+    "DSH_PUSH_ENABLED=$push_enabled"
 )
+if $personal_team; then
+    build_args+=("CODE_SIGN_ENTITLEMENTS=$PWD/iosApp/DshMobile.personal-team.entitlements")
+fi
 if $archive_app; then
     xcodebuild "${build_args[@]}" -archivePath "$archive_path" archive
     built_app="$archive_path/Products/Applications/DshMobile.app"

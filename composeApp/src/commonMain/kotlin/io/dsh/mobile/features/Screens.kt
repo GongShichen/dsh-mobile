@@ -1,6 +1,8 @@
 package io.dsh.mobile.features
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -9,9 +11,17 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import io.dsh.mobile.design.IconTile
+import io.dsh.mobile.design.StatusPill
 import androidx.compose.ui.unit.dp
+import io.dsh.mobile.design.keyboardInputArea
 import io.dsh.mobile.AppGraph
 import io.dsh.mobile.model.*
 import io.dsh.mobile.sync.MobileRepository
@@ -27,14 +37,24 @@ internal fun parameters(vararg pairs: Pair<String, String>): JsonObject = buildJ
 
 @Composable
 fun EmptyPanel(title: String, description: String, action: (@Composable () -> Unit)? = null) {
-    Column(Modifier.fillMaxSize().padding(32.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(title, style = MaterialTheme.typography.headlineSmall); Spacer(Modifier.height(12.dp))
-        Text(description, color = MaterialTheme.colorScheme.onSurfaceVariant); Spacer(Modifier.height(20.dp)); action?.invoke()
+    Box(Modifier.fillMaxSize().padding(28.dp), contentAlignment = Alignment.Center) {
+        Column(Modifier.widthIn(max = 380.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            IconTile("CHATS", Modifier.padding(bottom = 8.dp))
+            Text(title, style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center)
+            Text(description, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
+            action?.invoke()
+        }
     }
 }
 @Composable
 internal fun SectionCard(title: String, content: @Composable ColumnScope.() -> Unit) {
-    OutlinedCard(Modifier.fillMaxWidth()) { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) { Text(title, style = MaterialTheme.typography.titleMedium); content() } }
+    Surface(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(.5.dp, MaterialTheme.colorScheme.outlineVariant)) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(title, style = MaterialTheme.typography.titleMedium)
+            content()
+        }
+    }
 }
 
 @Composable
@@ -42,33 +62,79 @@ fun DevicesScreen(state: MobileState, repository: MobileRepository, busy: Boolea
     val focus = LocalFocusManager.current
     var invitation by remember { mutableStateOf("") }
     var name by remember { mutableStateOf("我的手机") }
+    var manual by remember { mutableStateOf(false) }
     var forget by remember { mutableStateOf<DesktopHost?>(null) }
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        item { SectionCard("连接一台电脑") {
-            Text("在电脑的 DeepSeek Harness 中打开“移动访问”，生成配对二维码。")
-            OutlinedTextField(name, { name = it }, label = { Text("手机名称") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-            Button(enabled = !busy && AppGraph.scanner != null, onClick = { run { AppGraph.scanner?.scan()?.let { repository.pair(it, name) } } }, modifier = Modifier.fillMaxWidth()) { Text("扫描配对二维码") }
-            OutlinedTextField(invitation, { invitation = it }, label = { Text("或粘贴配对链接") }, maxLines = 3, modifier = Modifier.fillMaxWidth())
-            OutlinedButton(enabled = invitation.isNotBlank() && !busy, onClick = { val value = invitation; invitation = ""; focus.clearFocus(); run { repository.pair(value, name) } }, modifier = Modifier.fillMaxWidth()) { Text("连接并等待电脑确认") }
-            if (state.connection == ConnectionStatus.AWAITING_APPROVAL) Text("配对请求已发送，请在电脑上核对手机名称并允许。", color = MaterialTheme.colorScheme.primary)
-            if (state.connection == ConnectionStatus.PAIRING || state.connection == ConnectionStatus.AWAITING_APPROVAL) TextButton(onClick = { run { repository.disconnect() } }) { Text("取消配对") }
-        } }
-        item { Text("我的电脑", style = MaterialTheme.typography.titleLarge) }
-        if (state.hosts.isEmpty()) item { Text("还没有配对的电脑", color = MaterialTheme.colorScheme.onSurfaceVariant) }
-        items(state.hosts, key = { it.id }) { host -> SectionCard(host.name) {
-            SelectionContainer { Text(host.endpointId, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-            Text(if (state.activeHostId == host.id && state.connected) "已连接 · ${state.path.name.lowercase()}" else "已配对")
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(enabled = !busy, onClick = { run { repository.connect(host.id) } }) { Text(if (state.activeHostId == host.id && state.connected) "重新连接" else "连接") }
-                TextButton(onClick = { forget = host }) { Text("移除") }
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+        if (state.hosts.isNotEmpty()) item { Text("已配对的电脑", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        items(state.hosts, key = { it.id }) { host ->
+            var details by remember(host.id) { mutableStateOf(false) }
+            var menu by remember(host.id) { mutableStateOf(false) }
+            val online = state.activeHostId == host.id && state.connected
+            Surface(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surface,
+                border = BorderStroke(1.dp, if (online) MaterialTheme.colorScheme.primary.copy(alpha = .3f) else MaterialTheme.colorScheme.outlineVariant)) {
+                Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        IconTile("LAPTOP")
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(host.name, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            Text(if (online) "你的工作区已同步" else "打开连接，继续电脑上的工作", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Box {
+                            IconButton(onClick = { menu = true }, modifier = Modifier.semantics { contentDescription = "电脑操作" }) { NavigationIcon("MORE") }
+                            DropdownMenu(menu, { menu = false }) {
+                                DropdownMenuItem(text = { Text("设备详情") }, onClick = { menu = false; details = !details })
+                                DropdownMenuItem(text = { Text("移除电脑") }, onClick = { menu = false; forget = host })
+                            }
+                        }
+                    }
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        StatusPill(if (online) "已连接 · ${if (state.path == ConnectionPath.DIRECT) "直连" else if (state.path == ConnectionPath.RELAY) "加密中继" else "同步中"}" else "离线", online)
+                        Spacer(Modifier.weight(1f))
+                        if (online) TextButton(enabled = !busy, onClick = { run { repository.disconnect() } }) { Text("断开") }
+                        else FilledTonalButton(enabled = !busy, onClick = { run { repository.connect(host.id) } }) { Text("连接") }
+                    }
+                    if (details) SelectionContainer { Text(host.endpointId, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                }
             }
-        } }
+        }
+        item {
+            Surface(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surface) {
+                Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        IconTile("SCAN")
+                        Column(Modifier.weight(1f)) {
+                            Text("连接一台电脑", style = MaterialTheme.typography.titleLarge)
+                            Text("一次配对，随时继续", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                    Text("在电脑的 DeepSeek Harness 中打开「移动访问」，扫描二维码即可连接。", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Button(enabled = !busy && AppGraph.scanner != null, onClick = { focus.clearFocus(); run { AppGraph.scanner?.scan()?.let { repository.pair(it, name) } } }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), shape = MaterialTheme.shapes.small) {
+                        NavigationIcon("SCAN"); Spacer(Modifier.width(8.dp)); Text("扫描配对二维码")
+                    }
+                    TextButton(onClick = { manual = true }, modifier = Modifier.fillMaxWidth()) { Text("或粘贴配对链接") }
+                }
+            }
+        }
+        if (state.connection == ConnectionStatus.AWAITING_APPROVAL || state.connection == ConnectionStatus.PAIRING) item {
+            SectionCard(if (state.connection == ConnectionStatus.AWAITING_APPROVAL) "等待电脑确认" else "正在建立加密连接") {
+                Text("请在电脑上核对手机名称并允许连接。", style = MaterialTheme.typography.bodyMedium)
+                TextButton(onClick = { run { repository.disconnect() } }) { Text("取消配对") }
+            }
+        }
+        item { Text("通过端到端加密连接，继续电脑上的会话与工作。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 4.dp)) }
     }
+    if (manual) AlertDialog(onDismissRequest = { manual = false }, title = { Text("使用配对链接") }, text = {
+        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Text("在电脑的移动访问面板复制链接，然后粘贴到这里。", style = MaterialTheme.typography.bodyMedium)
+            OutlinedTextField(name, { name = it }, label = { Text("手机名称") }, singleLine = true, modifier = Modifier.fillMaxWidth().keyboardInputArea(), shape = MaterialTheme.shapes.small)
+            OutlinedTextField(invitation, { invitation = it }, label = { Text("或粘贴配对链接") }, maxLines = 3, modifier = Modifier.fillMaxWidth().keyboardInputArea(), shape = MaterialTheme.shapes.small)
+        }
+    }, confirmButton = { TextButton(enabled = invitation.isNotBlank() && !busy, onClick = { val value = invitation; invitation = ""; manual = false; focus.clearFocus(); run { repository.pair(value, name) } }) { Text("连接并等待电脑确认") } }, dismissButton = { TextButton(onClick = { manual = false }) { Text("取消") } })
     forget?.let { host -> AlertDialog(onDismissRequest = { forget = null }, title = { Text("移除 ${host.name}？") }, text = { Text("清除本机保存的电脑入口。电脑端的授权可在“移动访问”中撤销。") }, confirmButton = { TextButton(onClick = { forget = null; run { repository.forgetHost(host.id) } }) { Text("移除") } }, dismissButton = { TextButton(onClick = { forget = null }) { Text("取消") } }) }
 }
 
 @Composable
-fun SessionsScreen(state: MobileState, repository: MobileRepository, busy: Boolean, run: RunAction, onAddDevice: () -> Unit, onOpen: () -> Unit) {
+fun SessionsScreen(state: MobileState, repository: MobileRepository, busy: Boolean, run: RunAction, onAddDevice: () -> Unit, openSession: (String) -> Unit) {
     var query by remember { mutableStateOf("") }; var archived by remember { mutableStateOf(false) }
     var rename by remember { mutableStateOf<SessionSummary?>(null) }; var title by remember { mutableStateOf("") }
     var matches by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
@@ -85,33 +151,43 @@ fun SessionsScreen(state: MobileState, repository: MobileRepository, busy: Boole
         } catch (error: Throwable) { if (error is CancellationException) throw error; searchError = "全文搜索暂不可用，正在按标题筛选。" }
         finally { searching = false }
     }
-    if (state.hosts.isEmpty()) { EmptyPanel("你的工作，随时继续", "连接电脑后，查看对话、确认操作和浏览文件。") { Button(onClick = onAddDevice) { Text("添加电脑") } }; return }
+    if (state.hosts.isEmpty()) { Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) { Text("连接电脑后，对话会显示在这里", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant); TextButton(onClick = onAddDevice) { Text("添加电脑") } }; return }
     val sessions = state.sessions.filter { it.archived == archived && (query.isBlank() || it.title.contains(query, ignoreCase = true) || matches.containsKey(it.id)) }.sortedWith(compareByDescending<SessionSummary> { it.pinned }.thenByDescending { it.updatedAt })
     Column(Modifier.fillMaxSize()) {
-        OutlinedTextField(query, { query = it }, label = { Text("搜索对话") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp))
-        if (searching) LinearProgressIndicator(Modifier.fillMaxWidth())
+        TextField(query, { query = it }, placeholder = { Text("搜索对话", style = MaterialTheme.typography.bodyMedium) }, leadingIcon = { NavigationIcon("SEARCH", 18.dp) }, singleLine = true,
+            textStyle = MaterialTheme.typography.bodyMedium, shape = MaterialTheme.shapes.small,
+            colors = TextFieldDefaults.colors(focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant, unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant, focusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent, unfocusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).keyboardInputArea().semantics { contentDescription = "搜索对话" })
+        if (searching) LinearProgressIndicator(Modifier.fillMaxWidth().height(2.dp))
         searchError?.let { Text(it, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(horizontal = 20.dp)) }
-        Row(Modifier.padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(selected = !archived, onClick = { archived = false }, label = { Text("最近") })
-            FilterChip(selected = archived, onClick = { archived = true }, label = { Text("已归档") })
-            Spacer(Modifier.weight(1f)); TextButton(enabled = state.connected && !busy, onClick = { run { repository.refreshSessions() } }) { Text("刷新") }
+        Row(Modifier.fillMaxWidth().padding(start = 24.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(if (archived) "已归档" else "最近对话", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+            var listMenu by remember { mutableStateOf(false) }
+            Box {
+                IconButton(onClick = { listMenu = true }, modifier = Modifier.semantics { contentDescription = "对话列表选项" }) { NavigationIcon("MORE", 18.dp) }
+                DropdownMenu(listMenu, onDismissRequest = { listMenu = false }) {
+                    DropdownMenuItem(text = { Text(if (archived) "查看最近对话" else "查看已归档") }, onClick = { archived = !archived; listMenu = false })
+                    DropdownMenuItem(text = { Text("刷新列表") }, enabled = state.connected && !busy, onClick = { listMenu = false; run { repository.refreshSessions() } })
+                }
+            }
         }
-        if (sessions.isEmpty()) EmptyPanel(if (query.isNotBlank()) "没有匹配的对话" else "还没有对话", if (state.connected) "点右上角“新对话”开始。" else "在设备页连接电脑后继续。")
+        if (sessions.isEmpty()) Text(if (query.isNotBlank()) "没有匹配的对话" else if (archived) "没有已归档对话" else "点上方新对话开始", Modifier.padding(24.dp), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         else LazyColumn(contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)) {
             items(sessions, key = { it.id }) { session ->
                 var menu by remember { mutableStateOf(false) }
-                ListItem(headlineContent = { Text(session.title.ifBlank { "未命名对话" }, maxLines = 1, overflow = TextOverflow.Ellipsis) }, supportingContent = { Text(matches[session.id] ?: if (session.running) "正在处理…" else if (session.pinned) "已置顶" else "点击继续对话", maxLines = 2, overflow = TextOverflow.Ellipsis, color = if (session.running) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant) },
-                    trailingContent = { Box { TextButton(onClick = { menu = true }) { Text("···") }; DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                ListItem(headlineContent = { Text(session.title.ifBlank { "未命名对话" }, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium) },
+                    supportingContent = if (query.isNotBlank() && !matches[session.id].isNullOrBlank()) ({ Text(matches[session.id].orEmpty(), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall) }) else null,
+                    leadingContent = if (session.running || session.pinned) ({ if (session.running) CircularProgressIndicator(Modifier.size(12.dp), strokeWidth = 1.5.dp) else NavigationIcon("PIN", 14.dp) }) else null,
+                    trailingContent = { Box { IconButton(onClick = { menu = true }, modifier = Modifier.semantics { contentDescription = "会话操作" }) { NavigationIcon("MORE", 18.dp) }; DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                         DropdownMenuItem(text = { Text("重命名") }, enabled = state.connected, onClick = { menu = false; title = session.title; rename = session })
                         DropdownMenuItem(text = { Text(if (session.pinned) "取消置顶" else "置顶") }, enabled = state.connected, onClick = { menu = false; run { repository.call(if (session.pinned) "sessions.unpin" else "sessions.pin", parameters("sessionId" to session.id)); repository.refreshSessions() } })
-                        DropdownMenuItem(text = { Text("从这里创建分支") }, enabled = state.connected, onClick = { menu = false; run { val response = repository.call("sessions.fork", parameters("sessionId" to session.id)).jsonObject; repository.refreshSessions(); response.string("sessionId")?.let { repository.selectSession(it); onOpen() } } })
+                        DropdownMenuItem(text = { Text("从这里创建分支") }, enabled = state.connected, onClick = { menu = false; run { val response = repository.call("sessions.fork", parameters("sessionId" to session.id)).jsonObject; repository.refreshSessions(); response.string("sessionId")?.let(openSession) } })
                         DropdownMenuItem(text = { Text(if (session.archived) "恢复对话" else "归档") }, enabled = state.connected, onClick = { menu = false; run { if (session.archived) repository.call("sessions.unarchive", parameters("sessionId" to session.id)) else repository.archiveSession(session.id); repository.refreshSessions() } })
-                    } } }, modifier = Modifier.clickable { run { repository.selectSession(session.id); onOpen() } })
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .45f))
+                    } } }, colors = ListItemDefaults.colors(containerColor = if (session.id == state.selectedSessionId) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.background), modifier = Modifier.clip(MaterialTheme.shapes.small).clickable { openSession(session.id) })
             }
         }
     }
-    rename?.let { session -> AlertDialog(onDismissRequest = { rename = null }, title = { Text("重命名对话") }, text = { OutlinedTextField(title, { title = it }, singleLine = true) }, confirmButton = { TextButton(enabled = title.isNotBlank(), onClick = { rename = null; run { repository.renameSession(session.id, title) } }) { Text("保存") } }, dismissButton = { TextButton(onClick = { rename = null }) { Text("取消") } }) }
+    rename?.let { session -> AlertDialog(onDismissRequest = { rename = null }, title = { Text("重命名对话") }, text = { OutlinedTextField(title, { title = it }, singleLine = true, modifier = Modifier.keyboardInputArea()) }, confirmButton = { TextButton(enabled = title.isNotBlank(), onClick = { rename = null; run { repository.renameSession(session.id, title) } }) { Text("保存") } }, dismissButton = { TextButton(onClick = { rename = null }) { Text("取消") } }) }
 }
 
 @Composable

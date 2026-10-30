@@ -1,6 +1,7 @@
 import Foundation
 import UIKit
 import AVFoundation
+import PhotosUI
 import UniformTypeIdentifiers
 import UserNotifications
 import DshMobile
@@ -25,12 +26,14 @@ private final class UiOperation: NSObject, UiCancellation, @unchecked Sendable {
         }
     }
     var isCancelled: Bool { lock.lock(); defer { lock.unlock() }; return settled }
-    func complete(_ action: () -> Void) {
+    @discardableResult
+    func complete(_ action: () -> Void) -> Bool {
         lock.lock()
-        guard !settled else { lock.unlock(); return }
+        guard !settled else { lock.unlock(); return false }
         settled = true
         lock.unlock()
         action()
+        return true
     }
     func cancel() {
         lock.lock()
@@ -50,10 +53,20 @@ private final class DocumentResult: NSObject, UIDocumentPickerDelegate, UIAdapti
     func presentationControllerDidDismiss(_ presentationController: UIPresentationController) { finish(nil) }
 }
 
+private final class PhotoResult: NSObject, PHPickerViewControllerDelegate, UIAdaptivePresentationControllerDelegate {
+    private var finished = false
+    let finish: ([PHPickerResult]) -> Void
+    init(_ finish: @escaping ([PHPickerResult]) -> Void) { self.finish = finish }
+    func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) { complete(results) }
+    func presentationControllerDidDismiss(_ presentationController: UIPresentationController) { complete([]) }
+    private func complete(_ results: [PHPickerResult]) { guard !finished else { return }; finished = true; finish(results) }
+}
+
 final class IOSPlatformServices: NSObject, NativeUiBridge, @unchecked Sendable {
     private let fileLock = NSLock()
     private var files: [String: URL] = [:]
     private var documentDelegate: DocumentResult?
+    private var photoDelegate: PhotoResult?
     private var presentationOperation: UiOperation?
     private let maximumFileSize: Int64 = 128 * 1024 * 1024
 
@@ -62,7 +75,7 @@ final class IOSPlatformServices: NSObject, NativeUiBridge, @unchecked Sendable {
         let entitlementEnvironment = Bundle.main.object(forInfoDictionaryKey: "DSHAPNsEnvironment") as? String
         return PushAppMetadata(platform: "ios", applicationId: Bundle.main.bundleIdentifier ?? "io.github.gongshichen.dshmobile",
             teamId: team?.isEmpty == false ? team : nil,
-            environment: entitlementEnvironment == "production" ? "production" : (entitlementEnvironment == "development" ? "sandbox" : nil))
+            environment: IOSPushCapability.isEnabled ? (entitlementEnvironment == "production" ? "production" : (entitlementEnvironment == "development" ? "sandbox" : nil)) : nil)
     }
 
     private func reservePresentation(_ operation: UiOperation) throws {
@@ -159,6 +172,76 @@ final class IOSPlatformServices: NSObject, NativeUiBridge, @unchecked Sendable {
         return operation
     }
 
+    func pickPhotos(callback: UiFilesCallback) -> UiCancellation {
+        let operation = UiOperation()
+        DispatchQueue.main.async { [self] in
+            guard !operation.isCancelled else { return }
+            do {
+                try reservePresentation(operation)
+                let parent = try presenter()
+                var configuration = PHPickerConfiguration(photoLibrary: .shared())
+                configuration.filter = .images
+                configuration.selectionLimit = 10
+                configuration.preferredAssetRepresentationMode = .compatible
+                let picker = PHPickerViewController(configuration: configuration)
+                let delegate = PhotoResult { [self] results in
+                    photoDelegate = nil
+                    picker.dismiss(animated: true)
+                    guard !results.isEmpty else { operation.complete { callback.success(files: []) }; return }
+                    var picked: [PickedFile] = []
+                    func finishError(_ error: Error) {
+                        picked.forEach { releaseFile(handle: $0.handle) }
+                        operation.complete { callback.failure(message: error.localizedDescription) }
+                    }
+                    func load(_ index: Int) {
+                        guard !operation.isCancelled else { picked.forEach { releaseFile(handle: $0.handle) }; return }
+                        if index == results.count {
+                            if !operation.complete({ callback.success(files: picked) }) { picked.forEach { releaseFile(handle: $0.handle) } }
+                            return
+                        }
+                        let provider = results[index].itemProvider
+                        let progress = provider.loadFileRepresentation(forTypeIdentifier: UTType.image.identifier) { [self] url, error in
+                            do {
+                                if let error { throw error }
+                                guard let url else { throw MobileUIError(message: "无法读取所选照片，请先确认照片已从 iCloud 下载") }
+                                let handle = UUID().uuidString
+                                let target = FileManager.default.temporaryDirectory.appendingPathComponent("dsh-upload-\(handle)")
+                                var ext = url.pathExtension.lowercased()
+                                let suggestedName = provider.suggestedName ?? "照片-\(index + 1)"
+                                var name = (suggestedName as NSString).deletingPathExtension
+                                if ext.isEmpty { ext = "jpg" }
+                                if ["heic", "heif"].contains(ext) {
+                                    guard let image = UIImage(contentsOfFile: url.path), let data = image.jpegData(compressionQuality: 0.95) else { throw MobileUIError(message: "无法转换这张照片") }
+                                    guard data.count <= maximumFileSize else { throw MobileUIError(message: "单张照片不能超过 128 MiB") }
+                                    try data.write(to: target, options: .atomic)
+                                    ext = "jpg"
+                                } else {
+                                    let size = (try FileManager.default.attributesOfItem(atPath: url.path)[.size] as? NSNumber)?.int64Value ?? 0
+                                    guard size <= maximumFileSize else { throw MobileUIError(message: "单张照片不能超过 128 MiB") }
+                                    // The provider's temporary URL is only valid inside this callback.
+                                    try FileManager.default.copyItem(at: url, to: target)
+                                }
+                                name += ".\(ext)"
+                                let size = (try FileManager.default.attributesOfItem(atPath: target.path)[.size] as? NSNumber)?.int64Value ?? 0
+                                fileLock.lock(); files[handle] = target; fileLock.unlock()
+                                picked.append(PickedFile(name: name, mimeType: UTType(filenameExtension: ext)?.preferredMIMEType ?? "image/jpeg", length: size, handle: handle))
+                                load(index + 1)
+                            } catch { finishError(error) }
+                        }
+                        operation.onCancel = { progress.cancel() }
+                    }
+                    load(0)
+                }
+                photoDelegate = delegate
+                picker.delegate = delegate
+                picker.presentationController?.delegate = delegate
+                operation.onCancel = { [weak self, weak picker] in self?.photoDelegate = nil; picker?.dismiss(animated: true) }
+                parent.present(picker, animated: true)
+            } catch { operation.complete { callback.failure(message: error.localizedDescription) } }
+        }
+        return operation
+    }
+
     func readFile(handle: String, offset: Int64, length: Int32, callback: UiBytesCallback) -> UiCancellation {
         let operation = UiOperation()
         DispatchQueue.global(qos: .userInitiated).async { [self] in
@@ -223,6 +306,10 @@ final class IOSPlatformServices: NSObject, NativeUiBridge, @unchecked Sendable {
 
     func requestNotificationPermission(callback: UiBooleanCallback) -> UiCancellation {
         let operation = UiOperation()
+        guard IOSPushCapability.isEnabled else {
+            operation.complete { callback.failure(message: IOSPushCapability.unavailableMessage) }
+            return operation
+        }
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { allowed, error in
             DispatchQueue.main.async {
                 if let error { operation.complete { callback.failure(message: error.localizedDescription) }; return }

@@ -432,7 +432,7 @@ class MobileRepository(
         closeCurrent()
         val currentEpoch = epoch
         val savedSessions = cache.sessions(hostId)
-        mutableState.update { it.copy(activeHostId = hostId, connection = ConnectionStatus.CONNECTING, error = null, path = ConnectionPath.UNKNOWN, sessions = savedSessions, messages = emptyList(), selectedSessionId = null, interactions = emptyList(), workspaces = emptyList(), models = emptyList(), jobs = emptyList(), capabilities = emptySet(), sessionState = null, projections = null, draft = "", operations = emptyList()) }
+        mutableState.update { it.copy(activeHostId = hostId, connection = ConnectionStatus.CONNECTING, error = null, path = ConnectionPath.UNKNOWN, sessions = savedSessions, messages = emptyList(), selectedSessionId = null, interactions = emptyList(), workspaces = emptyList(), models = emptyList(), defaultModel = null, jobs = emptyList(), capabilities = emptySet(), sessionState = null, projections = null, draft = "", operations = emptyList()) }
         val connection = openPeer(PeerDescriptor(host.endpointId, host.ticket))
         try {
             val session = openRpc(connection, currentEpoch)
@@ -644,7 +644,7 @@ class MobileRepository(
                 JsonObject(model + mapOf("provider" to JsonPrimitive(provider.string("id").orEmpty()), "providerName" to JsonPrimitive(provider.string("name").orEmpty()), "model" to JsonPrimitive(id)))
             }
         }
-        if (currentEpoch == epoch) mutableState.update { it.copy(models = rows) }
+        if (currentEpoch == epoch) mutableState.update { it.copy(models = rows, defaultModel = catalog.obj("default")) }
     }
 
     private fun decorateSessions(rows: List<SessionSummary>): List<SessionSummary> = workspaceReducer.decorate(rows)

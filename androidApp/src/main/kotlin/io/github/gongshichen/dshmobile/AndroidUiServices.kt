@@ -6,6 +6,7 @@ import android.os.Build
 import android.provider.OpenableColumns
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.core.content.ContextCompat
 import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
@@ -41,6 +42,9 @@ class AndroidUiServices(private val activity: ComponentActivity) {
         scanResult?.complete(result.contents)
     }
     private val filesLauncher = activity.registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+        filesResult?.complete(uris)
+    }
+    private val photosLauncher = activity.registerForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(10)) { uris ->
         filesResult?.complete(uris)
     }
     private val notificationLauncher = activity.registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -88,12 +92,13 @@ class AndroidUiServices(private val activity: ComponentActivity) {
     }
 
     val filePicker: FilePicker = object : FilePicker {
-        override suspend fun pick(): List<PickedFile> = filesLock.withLock {
+        override suspend fun pick(photos: Boolean): List<PickedFile> = filesLock.withLock {
             val uris = withContext(Dispatchers.Main.immediate) {
                 val pending = CompletableDeferred<List<android.net.Uri>>()
                 filesResult = pending
                 try {
-                    filesLauncher.launch(arrayOf("*/*"))
+                    if (photos) photosLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                    else filesLauncher.launch(arrayOf("*/*"))
                     pending.await()
                 } finally {
                     filesResult = null

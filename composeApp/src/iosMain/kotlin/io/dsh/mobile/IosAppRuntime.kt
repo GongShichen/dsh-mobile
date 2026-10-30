@@ -37,9 +37,9 @@ class IosAppRuntime internal constructor(
     fun networkAvailable() { scope.launch { repository.resume() } }
 }
 
-fun installIosApp(transportBridge: NativeIrohBridge, uiBridge: NativeUiBridge): IosAppRuntime {
+fun installIosApp(transportBridge: NativeIrohBridge, uiBridge: NativeUiBridge, remotePushEnabled: Boolean = true): IosAppRuntime {
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
-    val push = IosPushAdapter(uiBridge)
+    val push = IosPushAdapter(uiBridge, remotePushEnabled)
     val repository = MobileRepository(
         BridgePeerTransport(transportBridge), createSecureStore(), DatabaseDriverFactory().createCache(),
         scope, object : Clock { override fun nowMillis() = (NSDate().timeIntervalSince1970 * 1000).toLong() },
@@ -56,11 +56,12 @@ fun installIosApp(transportBridge: NativeIrohBridge, uiBridge: NativeUiBridge): 
         }
     }
     AppGraph.filePicker = object : FilePicker {
-        override suspend fun pick(): List<PickedFile> = suspendCancellableCoroutine { continuation ->
-            val operation = uiBridge.pickFiles(object : UiFilesCallback {
+        override suspend fun pick(photos: Boolean): List<PickedFile> = suspendCancellableCoroutine { continuation ->
+            val callback = object : UiFilesCallback {
                 override fun success(files: List<PickedFile>) { if (continuation.isActive) continuation.resume(files) }
                 override fun failure(message: String) { if (continuation.isActive) continuation.resumeWithException(IllegalStateException(message)) }
-            })
+            }
+            val operation = if (photos) uiBridge.pickPhotos(callback) else uiBridge.pickFiles(callback)
             continuation.invokeOnCancellation { operation.cancel() }
         }
         override suspend fun read(handle: String, offset: Long, length: Int): ByteArray = suspendCancellableCoroutine { continuation ->
@@ -87,12 +88,15 @@ fun installIosApp(transportBridge: NativeIrohBridge, uiBridge: NativeUiBridge): 
     return IosAppRuntime(repository, scope, push)
 }
 
-internal class IosPushAdapter(private val bridge: NativeUiBridge) : PushService {
+internal class IosPushAdapter(private val bridge: NativeUiBridge, private val remotePushEnabled: Boolean) : PushService {
     private var registered = false
     private val updates = MutableSharedFlow<PushRegistration>(replay = 1, extraBufferCapacity = 1)
     override val registrations = updates.asSharedFlow()
     override fun appMetadata() = bridge.appMetadata()
-    override suspend fun configure(options: FirebasePublicOptions?) = if (registered) PushAvailability.AVAILABLE else PushAvailability.UNCONFIGURED
+    override suspend fun configure(options: FirebasePublicOptions?): PushAvailability {
+        check(remotePushEnabled) { "当前签名不支持远程推送。电脑连接、会话和文件功能仍可正常使用。" }
+        return if (registered) PushAvailability.AVAILABLE else PushAvailability.UNCONFIGURED
+    }
     override suspend fun requestPermission(): Boolean = suspendCancellableCoroutine { continuation ->
         val operation = bridge.requestNotificationPermission(object : UiBooleanCallback {
             override fun success(value: Boolean) { if (continuation.isActive) continuation.resume(value) }
@@ -101,6 +105,7 @@ internal class IosPushAdapter(private val bridge: NativeUiBridge) : PushService 
         continuation.invokeOnCancellation { operation.cancel() }
     }
     fun register(token: String, environment: String, appId: String) {
+        if (!remotePushEnabled) return
         require(environment in setOf("sandbox", "production")) { "Invalid APNs environment" }
         registered = true
         updates.tryEmit(PushRegistration("apns", token, environment, appId))

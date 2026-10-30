@@ -16,6 +16,7 @@ settings:
     DEVELOPMENT_TEAM: "$(DSH_DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     APS_ENVIRONMENT: development
+    DSH_PUSH_ENABLED: "YES"
     "ARCHS[sdk=iphonesimulator*]": arm64
     "CODE_SIGN_IDENTITY[sdk=iphonesimulator*]": "-"
   configs:
@@ -27,6 +28,10 @@ targets:
     platform: iOS
     sources:
       - path: Sources
+      - path: ../composeApp/build/xcode-generated/KotlinBuildStamp.swift
+        type: file
+        optional: true
+        buildPhase: sources
       - path: Resources
         buildPhase: resources
     info:
@@ -37,6 +42,7 @@ targets:
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         DSHAPNsEnvironment: "$(APS_ENVIRONMENT)"
         DSHSigningTeam: "$(DEVELOPMENT_TEAM)"
+        DSHPushEnabled: "$(DSH_PUSH_ENABLED)"
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
@@ -65,18 +71,28 @@ targets:
           - "$(SRCROOT)/../composeApp/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)"
         OTHER_LDFLAGS:
           - "$(inherited)"
-          - "-framework DshMobile"
           - "-lsqlite3"
     dependencies:
       - package: Iroh
         product: IrohLib
+      - framework: ../composeApp/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)/DshMobile.framework
+        embed: false
+        link: true
     preBuildScripts:
       - name: Build shared Kotlin framework
         script: |
           set -eu
           cd "$SRCROOT/.."
           ./gradlew :composeApp:embedAndSignAppleFrameworkForXcode
+          framework="$SRCROOT/../composeApp/build/xcode-frameworks/$CONFIGURATION/$SDK_NAME/DshMobile.framework/DshMobile"
+          stamp="$SRCROOT/../composeApp/build/xcode-generated/KotlinBuildStamp.swift"
+          mkdir -p "$(dirname "$stamp")"
+          fingerprint=$(shasum -a 256 "$framework" | cut -d ' ' -f 1)
+          printf 'internal enum DshKotlinBuildStamp { static let sha256 = "%s" }\n' "$fingerprint" > "$stamp.tmp"
+          if ! cmp -s "$stamp.tmp" "$stamp"; then mv "$stamp.tmp" "$stamp"; else rm "$stamp.tmp"; fi
         basedOnDependencyAnalysis: false
+        outputFiles:
+          - "$(SRCROOT)/../composeApp/build/xcode-generated/KotlinBuildStamp.swift"
   DshMobileUITests:
     type: bundle.ui-testing
     platform: iOS

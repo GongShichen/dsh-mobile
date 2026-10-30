@@ -10,11 +10,15 @@
 		014A8F39FEE8671469E6319F /* IOSPushService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69CE15A14C86E875125566C9 /* IOSPushService.swift */; };
 		031C2782941CC726BFB8F71B /* iroh-MIT.txt in Resources */ = {isa = PBXBuildFile; fileRef = F3FCA32421C017018FD0AE8B /* iroh-MIT.txt */; };
 		26752A592B82D82540428C79 /* IOSPlatformServices.swift in Sources */ = {isa = PBXBuildFile; fileRef = 972CC6D8D61A86C42DCC8155 /* IOSPlatformServices.swift */; };
+		2680189CB90DE7D6ACC4C0E8 /* KotlinBuildStamp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22E9B7A70C23EFF15949754B /* KotlinBuildStamp.swift */; };
+		361AD9144DC88956681F864D /* IOSPushCapability.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF112C48C8843E7F4C4993E5 /* IOSPushCapability.swift */; };
+		85EEB51E35053C30AC2DC3E4 /* IOSGlassButtons.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72AFE8714A3C549F79E6A0D8 /* IOSGlassButtons.swift */; };
 		ACD10B8516DE2E0892864BFC /* DshMobileUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6982C5F3DA0E5D0799ACFAA7 /* DshMobileUITests.swift */; };
 		C21582FC6AAECE8F066A2992 /* IrohLib in Frameworks */ = {isa = PBXBuildFile; productRef = 8AC4094695514B93580C43B9 /* IrohLib */; };
 		E0E04D56026CD22892EA98A6 /* DshMobileApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51DC7570E5B54F6AF003169E /* DshMobileApp.swift */; };
 		E8B6D260518E09E23F30ECC8 /* IrohBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2852DFF0B9EB1ED8B58DA17 /* IrohBridge.swift */; };
 		F2BA4124944FCC707DE47945 /* iroh-Apache-2.0.txt in Resources */ = {isa = PBXBuildFile; fileRef = 1EF5BBE370020F63F7612F3F /* iroh-Apache-2.0.txt */; };
+		F8D2B03D9D196F38254C01BF /* DshMobile.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3ACC24816EC0A258DD7BB03E /* DshMobile.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -30,13 +34,17 @@
 /* Begin PBXFileReference section */
 		1B767708AEFDFF8F91AE7183 /* DshMobile.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = DshMobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		1EF5BBE370020F63F7612F3F /* iroh-Apache-2.0.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "iroh-Apache-2.0.txt"; sourceTree = "<group>"; };
+		22E9B7A70C23EFF15949754B /* KotlinBuildStamp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KotlinBuildStamp.swift; sourceTree = "<group>"; };
+		3ACC24816EC0A258DD7BB03E /* DshMobile.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = DshMobile.framework; path = "../composeApp/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)/DshMobile.framework"; sourceTree = "<group>"; };
 		3E1FE6AF2A7FF06C34C8CEC5 /* DshMobileUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = DshMobileUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		51DC7570E5B54F6AF003169E /* DshMobileApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DshMobileApp.swift; sourceTree = "<group>"; };
 		6982C5F3DA0E5D0799ACFAA7 /* DshMobileUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DshMobileUITests.swift; sourceTree = "<group>"; };
 		69CE15A14C86E875125566C9 /* IOSPushService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSPushService.swift; sourceTree = "<group>"; };
+		72AFE8714A3C549F79E6A0D8 /* IOSGlassButtons.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSGlassButtons.swift; sourceTree = "<group>"; };
 		972CC6D8D61A86C42DCC8155 /* IOSPlatformServices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSPlatformServices.swift; sourceTree = "<group>"; };
 		D2852DFF0B9EB1ED8B58DA17 /* IrohBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IrohBridge.swift; sourceTree = "<group>"; };
 		F3FCA32421C017018FD0AE8B /* iroh-MIT.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "iroh-MIT.txt"; sourceTree = "<group>"; };
+		FF112C48C8843E7F4C4993E5 /* IOSPushCapability.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSPushCapability.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -45,12 +53,21 @@
 			buildActionMask = 2147483647;
 			files = (
 				C21582FC6AAECE8F066A2992 /* IrohLib in Frameworks */,
+				F8D2B03D9D196F38254C01BF /* DshMobile.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		2C291A7DEAFDCA53FA7567FD /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				3ACC24816EC0A258DD7BB03E /* DshMobile.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		3140D067A23136EA53C74937 /* Licenses */ = {
 			isa = PBXGroup;
 			children = (
@@ -60,12 +77,23 @@
 			path = Licenses;
 			sourceTree = "<group>";
 		};
+		33CD5834408ECF843E72A430 /* xcode-generated */ = {
+			isa = PBXGroup;
+			children = (
+				22E9B7A70C23EFF15949754B /* KotlinBuildStamp.swift */,
+			);
+			name = "xcode-generated";
+			path = "../composeApp/build/xcode-generated";
+			sourceTree = "<group>";
+		};
 		5B02C88EEE8C345EFF4BA940 = {
 			isa = PBXGroup;
 			children = (
 				C6E0AADF6D983C99F95267D6 /* Resources */,
 				8270190234B078EAF2AA3C24 /* Sources */,
 				67E27E6264FE8AF7D5E4A64B /* Tests */,
+				33CD5834408ECF843E72A430 /* xcode-generated */,
+				2C291A7DEAFDCA53FA7567FD /* Frameworks */,
 				91A00150D7340B128C808A95 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -82,7 +110,9 @@
 			isa = PBXGroup;
 			children = (
 				51DC7570E5B54F6AF003169E /* DshMobileApp.swift */,
+				72AFE8714A3C549F79E6A0D8 /* IOSGlassButtons.swift */,
 				972CC6D8D61A86C42DCC8155 /* IOSPlatformServices.swift */,
+				FF112C48C8843E7F4C4993E5 /* IOSPushCapability.swift */,
 				69CE15A14C86E875125566C9 /* IOSPushService.swift */,
 				D2852DFF0B9EB1ED8B58DA17 /* IrohBridge.swift */,
 			);
@@ -218,10 +248,11 @@
 			outputFileListPaths = (
 			);
 			outputPaths = (
+				"$(SRCROOT)/../composeApp/build/xcode-generated/KotlinBuildStamp.swift",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "set -eu\ncd \"$SRCROOT/..\"\n./gradlew :composeApp:embedAndSignAppleFrameworkForXcode\n";
+			shellScript = "set -eu\ncd \"$SRCROOT/..\"\n./gradlew :composeApp:embedAndSignAppleFrameworkForXcode\nframework=\"$SRCROOT/../composeApp/build/xcode-frameworks/$CONFIGURATION/$SDK_NAME/DshMobile.framework/DshMobile\"\nstamp=\"$SRCROOT/../composeApp/build/xcode-generated/KotlinBuildStamp.swift\"\nmkdir -p \"$(dirname \"$stamp\")\"\nfingerprint=$(shasum -a 256 \"$framework\" | cut -d ' ' -f 1)\nprintf 'internal enum DshKotlinBuildStamp { static let sha256 = \"%s\" }\\n' \"$fingerprint\" > \"$stamp.tmp\"\nif ! cmp -s \"$stamp.tmp\" \"$stamp\"; then mv \"$stamp.tmp\" \"$stamp\"; else rm \"$stamp.tmp\"; fi\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -239,9 +270,12 @@
 			buildActionMask = 2147483647;
 			files = (
 				E0E04D56026CD22892EA98A6 /* DshMobileApp.swift in Sources */,
+				85EEB51E35053C30AC2DC3E4 /* IOSGlassButtons.swift in Sources */,
 				26752A592B82D82540428C79 /* IOSPlatformServices.swift in Sources */,
+				361AD9144DC88956681F864D /* IOSPushCapability.swift in Sources */,
 				014A8F39FEE8671469E6319F /* IOSPushService.swift in Sources */,
 				E8B6D260518E09E23F30ECC8 /* IrohBridge.swift in Sources */,
+				2680189CB90DE7D6ACC4C0E8 /* KotlinBuildStamp.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -266,6 +300,7 @@
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(SRCROOT)/../composeApp/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)",
+					"\"../composeApp/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)\"",
 				);
 				INFOPLIST_FILE = Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -275,7 +310,6 @@
 				MARKETING_VERSION = 0.1.0;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
-					"-framework DshMobile",
 					"-lsqlite3",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = io.github.gongshichen.dshmobile;
@@ -296,6 +330,7 @@
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(SRCROOT)/../composeApp/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)",
+					"\"../composeApp/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)\"",
 				);
 				INFOPLIST_FILE = Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -305,7 +340,6 @@
 				MARKETING_VERSION = 0.1.0;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
-					"-framework DshMobile",
 					"-lsqlite3",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = io.github.gongshichen.dshmobile;
@@ -356,6 +390,7 @@
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = "$(DSH_DEVELOPMENT_TEAM)";
+				DSH_PUSH_ENABLED = YES;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
@@ -442,6 +477,7 @@
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = "$(DSH_DEVELOPMENT_TEAM)";
+				DSH_PUSH_ENABLED = YES;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;

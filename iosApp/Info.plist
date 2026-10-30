@@ -24,6 +24,8 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>DSHAPNsEnvironment</key>
 	<string>$(APS_ENVIRONMENT)</string>
+	<key>DSHPushEnabled</key>
+	<string>$(DSH_PUSH_ENABLED)</string>
 	<key>DSHSigningTeam</key>
 	<string>$(DEVELOPMENT_TEAM)</string>
 	<key>NSCameraUsageDescription</key>

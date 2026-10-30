@@ -12,6 +12,7 @@ interface NativeUiBridge {
     fun appMetadata(): PushAppMetadata
     fun scan(callback: UiStringCallback): UiCancellation
     fun pickFiles(callback: UiFilesCallback): UiCancellation
+    fun pickPhotos(callback: UiFilesCallback): UiCancellation
     fun readFile(handle: String, offset: Long, length: Int, callback: UiBytesCallback): UiCancellation
     fun releaseFile(handle: String)
     fun saveFile(name: String, bytes: ByteArray, callback: UiUnitCallback): UiCancellation

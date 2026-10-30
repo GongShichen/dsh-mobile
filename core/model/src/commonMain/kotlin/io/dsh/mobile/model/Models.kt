@@ -27,6 +27,20 @@ data class SessionSummary(
 )
 
 @Serializable
+data class AssistantBlock(
+    val index: Int,
+    val kind: String,
+    val text: String = "",
+    val toolCallId: String? = null,
+    val name: String? = null,
+    val arguments: String = "",
+    val streaming: Boolean = false,
+)
+
+@Serializable
+enum class AssistantPhase { WAITING, THINKING, WRITING, TOOL_CALL, COMPLETE, INTERRUPTED }
+
+@Serializable
 data class MessageRecord(
     val id: String,
     val sessionId: String,
@@ -36,6 +50,9 @@ data class MessageRecord(
     val revision: Long = 0,
     val streaming: Boolean = false,
     val raw: JsonObject = JsonObject(emptyMap()),
+    val blocks: List<AssistantBlock> = emptyList(),
+    val phase: AssistantPhase = AssistantPhase.COMPLETE,
+    val presentationId: String? = null,
 )
 
 @Serializable
@@ -77,6 +94,7 @@ data class MobileState(
     val projections: JsonObject? = null,
     val workspaces: List<JsonObject> = emptyList(),
     val models: List<JsonObject> = emptyList(),
+    val defaultModel: JsonObject? = null,
     val jobs: List<JsonObject> = emptyList(),
     val hasMoreHistory: Boolean = false,
 ) {

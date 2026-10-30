@@ -12,11 +12,12 @@ struct DshMobileApp: App {
     private let networkMonitor: NWPathMonitor
 
     init() {
+        NativeGlassButtonsKt.installGlassButtonFactory(factory: IOSGlassButtons())
         let ui = IOSPlatformServices()
         let transport = IrohBridge()
         self.uiBridge = ui
         self.transport = transport
-        let runtime = IosAppRuntimeKt.installIosApp(transportBridge: transport, uiBridge: ui)
+        let runtime = IosAppRuntimeKt.installIosApp(transportBridge: transport, uiBridge: ui, remotePushEnabled: IOSPushCapability.isEnabled)
         self.runtime = runtime
         let monitor = NWPathMonitor()
         monitor.pathUpdateHandler = { path in

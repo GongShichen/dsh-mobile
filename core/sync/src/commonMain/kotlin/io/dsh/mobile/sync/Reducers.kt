@@ -111,6 +111,7 @@ class ProjectionReducer {
 class SessionReducer(private val sessionId: String) {
     private val durable = linkedMapOf<Long, MessageRecord>()
     private var transient: MessageRecord? = null
+    private val assistantBlocks = AssistantBlockAccumulator()
     private var revision = -1L
     private var attemptId: String? = null
     private var chunkIndex = -1L
@@ -125,7 +126,7 @@ class SessionReducer(private val sessionId: String) {
     fun seed(records: List<MessageRecord>) {
         durable.clear()
         records.filter { it.sequence != null }.forEach { durable[it.sequence!!] = it }
-        transient = null; revision = -1; attemptId = null; chunkIndex = -1
+        transient = null; assistantBlocks.clear(); revision = -1; attemptId = null; chunkIndex = -1
     }
 
     fun apply(event: JsonObject) {
@@ -159,8 +160,9 @@ class SessionReducer(private val sessionId: String) {
         assistant?.obj("activeAttempt")?.let { active ->
             attemptId = active.string("attemptId")
             chunkIndex = (active.long("nextIndex") ?: 0) - 1
-            val text = compactText(active.array("stream"))
-            transient = MessageRecord("attempt:${attemptId}", sessionId, "assistant", text, revision = revision, streaming = true, raw = active)
+            assistantBlocks.restore(active.array("stream"))
+            transient = MessageRecord("attempt:${attemptId}", sessionId, "assistant", assistantBlocks.text, revision = revision, streaming = true, raw = active,
+                blocks = assistantBlocks.blocks, phase = assistantBlocks.phase, presentationId = presentationId(active))
         }
     }
 
@@ -173,11 +175,15 @@ class SessionReducer(private val sessionId: String) {
             "assistant/message" -> "assistant" to contentText(data.obj("message")?.array("content") ?: JsonArray(emptyList()))
             else -> "event" to ""
         }
-        durable[seq] = MessageRecord("event:$seq", sessionId, role, text, sequence = seq, raw = event)
+        val sameAttempt = transient?.let { it.raw.long("turn") == data.long("turn") && it.raw.long("step") == data.long("step") } == true
+        val blocks = if (type == "assistant/message") canonicalAssistantBlocks(data.obj("message")?.array("content") ?: JsonArray(emptyList())) else emptyList()
+        durable[seq] = MessageRecord("event:$seq", sessionId, role, text, sequence = seq, raw = event, blocks = blocks,
+            phase = if (data.boolean("interrupted") == true) AssistantPhase.INTERRUPTED else AssistantPhase.COMPLETE,
+            presentationId = if (sameAttempt && type == "assistant/message") transient?.presentationId else null)
         if (seq > ((cursor?.get("cursor") as? JsonPrimitive)?.longOrNull ?: -1)) cursor = buildJsonObject { put("cursor", seq) }
         if (type == "assistant/message" || type == "assistant/attempt") {
             val live = transient
-            if (live != null && (live.raw.long("turn") == data.long("turn") || live.raw.long("turn") == null)) {
+            if (live != null && sameAttempt) {
                 transient = null
             }
         }
@@ -193,8 +199,9 @@ class SessionReducer(private val sessionId: String) {
         val incomingAttempt = frame.string("attemptId") ?: return
         when (frame.string("type")) {
             "start" -> {
-                revision = incomingRevision; attemptId = incomingAttempt; chunkIndex = -1
-                transient = MessageRecord("attempt:$incomingAttempt", sessionId, "assistant", "", revision = revision, streaming = true, raw = frame)
+                revision = incomingRevision; attemptId = incomingAttempt; chunkIndex = -1; assistantBlocks.clear()
+                transient = MessageRecord("attempt:$incomingAttempt", sessionId, "assistant", "", revision = revision, streaming = true, raw = frame,
+                    phase = AssistantPhase.WAITING, presentationId = presentationId(frame))
             }
             "chunk" -> {
                 if (incomingAttempt != attemptId) return
@@ -203,27 +210,21 @@ class SessionReducer(private val sessionId: String) {
                 if (index != chunkIndex + 1) throw ProtocolException("Assistant stream gap; a new baseline is required")
                 revision = incomingRevision; chunkIndex = index
                 val chunk = frame.obj("chunk") ?: return
-                val delta = if (chunk.string("type") == "text-delta") chunk.string("text").orEmpty() else ""
-                transient = transient?.copy(text = transient!!.text + delta, revision = revision)
+                assistantBlocks.apply(chunk)
+                transient = transient?.copy(text = assistantBlocks.text, blocks = assistantBlocks.blocks, phase = assistantBlocks.phase, revision = revision)
             }
             "end" -> {
                 if (incomingAttempt != attemptId) return
                 if (frame.long("index") != chunkIndex + 1) throw ProtocolException("Assistant terminal index mismatch")
                 revision = incomingRevision
-                transient = if (frame.obj("outcome")?.string("kind") == "abandoned") null else transient?.copy(streaming = false, revision = revision)
+                transient = if (frame.obj("outcome")?.string("kind") == "abandoned") null else transient?.copy(streaming = false, revision = revision, phase = AssistantPhase.COMPLETE, blocks = assistantBlocks.blocks.map { it.copy(streaming = false) })
             }
         }
     }
 
     private fun contentText(content: JsonArray): String = content.mapNotNull { (it as? JsonObject)?.takeIf { block -> block.string("type") == "text" }?.string("text") }.joinToString("")
-    private fun compactText(stream: JsonArray): String = stream.mapNotNull { record ->
-        val item = record as? JsonObject ?: return@mapNotNull null
-        when (item.string("type")) {
-            "text-chunks" -> item.array("texts").mapNotNull { (it as? JsonPrimitive)?.contentOrNull }.joinToString("")
-            "chunk" -> item.obj("chunk")?.takeIf { it.string("type") == "text-delta" }?.string("text")
-            else -> null
-        }
-    }.joinToString("")
+    private fun presentationId(frame: JsonObject) = "assistant:$sessionId:${frame.long("startedAfterSeq") ?: 0}:${frame.long("turn") ?: 0}:${frame.long("step") ?: 0}"
+
 }
 
 data class SubscriptionTarget(val topic: String, val sessionId: String? = null)

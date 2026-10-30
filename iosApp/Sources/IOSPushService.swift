@@ -16,6 +16,7 @@ final class IOSPushService: NSObject, UIApplicationDelegate, UNUserNotificationC
     }
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        guard IOSPushCapability.isEnabled else { return true }
         UNUserNotificationCenter.current().delegate = self
         if let notification = launchOptions?[.remoteNotification] as? [AnyHashable: Any] { pendingNotification = notification }
         UNUserNotificationCenter.current().getNotificationSettings { settings in
@@ -27,6 +28,7 @@ final class IOSPushService: NSObject, UIApplicationDelegate, UNUserNotificationC
     }
 
     func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+        guard IOSPushCapability.isEnabled else { return }
         self.deviceToken = deviceToken
         publishToken()
     }
@@ -49,12 +51,14 @@ final class IOSPushService: NSObject, UIApplicationDelegate, UNUserNotificationC
     }
 
     private func open(_ userInfo: [AnyHashable: Any]) {
+        guard IOSPushCapability.isEnabled else { return }
         guard let host = userInfo["hostId"] as? String, let event = userInfo["eventId"] as? String else { return }
         guard let runtime else { pendingNotification = userInfo; return }
         runtime.receivePush(hostId: host, eventId: event, sessionId: userInfo["sessionId"] as? String)
     }
 
     private func publishToken() {
+        guard IOSPushCapability.isEnabled else { return }
         guard let deviceToken, let runtime, let bundleID = Bundle.main.bundleIdentifier else { return }
         guard let entitlementEnvironment = Bundle.main.object(forInfoDictionaryKey: "DSHAPNsEnvironment") as? String,
               ["development", "production"].contains(entitlementEnvironment) else { return }

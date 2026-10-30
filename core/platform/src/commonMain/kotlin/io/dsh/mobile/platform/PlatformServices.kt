@@ -31,7 +31,7 @@ fun newOperationId(): String {
 interface QrScanner { suspend fun scan(): String? }
 data class PickedFile(val name: String, val mimeType: String?, val length: Long, val handle: String)
 interface FilePicker {
-    suspend fun pick(): List<PickedFile>
+    suspend fun pick(photos: Boolean = false): List<PickedFile>
     suspend fun read(handle: String, offset: Long, length: Int): ByteArray
     suspend fun release(handle: String)
 }

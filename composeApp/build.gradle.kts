@@ -36,6 +36,7 @@ kotlin {
             implementation(compose.components.resources)
             implementation(libs.coroutines.core)
             implementation(libs.serialization.json)
+            implementation(libs.markdown.m3)
         }
         commonTest.dependencies {
             implementation(kotlin("test"))
