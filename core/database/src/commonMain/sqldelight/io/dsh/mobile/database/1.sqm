@@ -1,0 +1,4 @@
+CREATE TABLE preference (
+  preference_key TEXT NOT NULL PRIMARY KEY,
+  preference_value TEXT NOT NULL
+);

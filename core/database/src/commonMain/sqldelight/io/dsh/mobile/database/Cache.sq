@@ -1,0 +1,97 @@
+CREATE TABLE desktop_host (
+  host_id TEXT NOT NULL PRIMARY KEY,
+  raw_json TEXT NOT NULL
+);
+CREATE TABLE cached_session (
+  host_id TEXT NOT NULL,
+  session_id TEXT NOT NULL,
+  updated_at INTEGER NOT NULL,
+  raw_json TEXT NOT NULL,
+  PRIMARY KEY (host_id, session_id)
+);
+CREATE TABLE message_record (
+  host_id TEXT NOT NULL,
+  session_id TEXT NOT NULL,
+  record_id TEXT NOT NULL,
+  sequence INTEGER,
+  raw_json TEXT NOT NULL,
+  PRIMARY KEY (host_id, session_id, record_id)
+);
+CREATE TABLE draft (
+  host_id TEXT NOT NULL,
+  session_id TEXT NOT NULL,
+  content TEXT NOT NULL,
+  PRIMARY KEY (host_id, session_id)
+);
+CREATE TABLE pending_operation (
+  host_id TEXT NOT NULL,
+  operation_id TEXT NOT NULL,
+  raw_json TEXT NOT NULL,
+  PRIMARY KEY (host_id, operation_id)
+);
+CREATE TABLE domain_cursor (
+  host_id TEXT NOT NULL,
+  domain TEXT NOT NULL,
+  raw_json TEXT NOT NULL,
+  PRIMARY KEY (host_id, domain)
+);
+CREATE TABLE push_configuration (
+  host_id TEXT NOT NULL PRIMARY KEY,
+  public_json TEXT NOT NULL
+);
+CREATE TABLE preference (
+  preference_key TEXT NOT NULL PRIMARY KEY,
+  preference_value TEXT NOT NULL
+);
+
+selectPreference:
+SELECT preference_value FROM preference WHERE preference_key = ?;
+upsertPreference:
+INSERT OR REPLACE INTO preference VALUES (?, ?);
+deletePreference:
+DELETE FROM preference WHERE preference_key = ?;
+
+selectHosts:
+SELECT raw_json FROM desktop_host ORDER BY host_id;
+upsertHost:
+INSERT OR REPLACE INTO desktop_host VALUES (?, ?);
+deleteHost:
+DELETE FROM desktop_host WHERE host_id = ?;
+selectSessions:
+SELECT raw_json FROM cached_session WHERE host_id = ? ORDER BY updated_at DESC, session_id;
+deleteSessions:
+DELETE FROM cached_session WHERE host_id = ?;
+upsertSession:
+INSERT OR REPLACE INTO cached_session VALUES (?, ?, ?, ?);
+selectMessages:
+SELECT raw_json FROM message_record WHERE host_id = ? AND session_id = ? ORDER BY sequence, record_id;
+upsertMessage:
+INSERT OR REPLACE INTO message_record VALUES (?, ?, ?, ?, ?);
+deleteSessionMessages:
+DELETE FROM message_record WHERE host_id = ? AND session_id = ?;
+deleteHostMessages:
+DELETE FROM message_record WHERE host_id = ?;
+selectDraft:
+SELECT content FROM draft WHERE host_id = ? AND session_id = ?;
+upsertDraft:
+INSERT OR REPLACE INTO draft VALUES (?, ?, ?);
+deleteHostDrafts:
+DELETE FROM draft WHERE host_id = ?;
+selectOperations:
+SELECT raw_json FROM pending_operation WHERE host_id = ? ORDER BY operation_id;
+upsertOperation:
+INSERT OR REPLACE INTO pending_operation VALUES (?, ?, ?);
+deleteHostOperations:
+DELETE FROM pending_operation WHERE host_id = ?;
+selectCursor:
+SELECT raw_json FROM domain_cursor WHERE host_id = ? AND domain = ?;
+upsertCursor:
+INSERT OR REPLACE INTO domain_cursor VALUES (?, ?, ?);
+deleteHostCursors:
+DELETE FROM domain_cursor WHERE host_id = ?;
+selectPushConfiguration:
+SELECT public_json FROM push_configuration WHERE host_id = ?;
+upsertPushConfiguration:
+INSERT OR REPLACE INTO push_configuration VALUES (?, ?);
+deletePushConfiguration:
+DELETE FROM push_configuration WHERE host_id = ?;

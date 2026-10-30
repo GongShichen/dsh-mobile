@@ -1,0 +1,3 @@
+[submodule "third_party/iroh-ffi"]
+	path = third_party/iroh-ffi
+	url = https://github.com/n0-computer/iroh-ffi.git
