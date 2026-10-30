@@ -10,4 +10,7 @@ xcodebuild -project iosApp/DshMobile.xcodeproj -scheme DshMobile \
     CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= ARCHS=arm64 \
     -only-testing:DshMobileUITests/DshMobileUITests/testLaunchDevicesAndSettings \
     -only-testing:DshMobileUITests/DshMobileUITests/testScannerUnavailableReturnsToDevices \
+    -only-testing:DshMobileUITests/DshMobileUITests/testInputAcceptsTouchTypingAndOutsideDismissal \
+    -only-testing:DshMobileUITests/DshMobileUITests/testManualPairingInputsAcceptTouchTyping \
+    -only-testing:DshMobileUITests/DshMobileUITests/testScannerReturnRestoresComposerInput \
     test "$@"
