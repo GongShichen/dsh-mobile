@@ -125,9 +125,10 @@ final class HLIOSInteractionFlowTests: XCTestCase {
             for mode in config.modes {
                 if ["permission", "questions"].contains(mode) && element("菜单").exists { try tap("菜单"); try tap("设置") }
                 stage("request:\(mode)")
-                if !["questions", "skip", "timed", "conversation"].contains(mode) { _ = try wait("来自：HL QA · \(mode)") }
+                if !["questions", "skip", "timed", "conversation", "changes"].contains(mode) { _ = try wait("来自：HL QA · \(mode)") }
                 Thread.sleep(forTimeInterval: 0.35) // Let the previous modal finish dismissing before tapping the new request.
                 switch mode {
+                case "changes": try verifyFileChanges()
                 case "conversation": try verifyConversationDisclosure()
                 case "approval":
                     _ = try wait("允许这一次"); _ = try wait("来自：HL QA · approval")
@@ -180,6 +181,41 @@ final class HLIOSInteractionFlowTests: XCTestCase {
             }
             stage("complete")
         } catch { capture("failure"); throw error }
+    }
+
+    private func verifyFileChanges() throws {
+        try tap("菜单")
+        let search = app.textViews.matching(NSPredicate(format: "label CONTAINS %@", "搜索对话")).firstMatch
+        guard search.waitForExistence(timeout: 10) else { throw HLFailure.missingControl("搜索对话") }
+        let name = configuration!.conversationTitle!
+        search.tap(); search.typeText(name); try tap(name)
+        _ = try wait("交互验证已完成。")
+        try tap("查看文件改动")
+        _ = try wait("文件改动"); _ = try wait("HLChanged.txt"); capture("changes-list")
+        let fileSearch = app.textViews.matching(NSPredicate(format: "label CONTAINS %@", "搜索改动文件")).firstMatch
+        guard fileSearch.waitForExistence(timeout: 10) else { throw HLFailure.missingControl("搜索改动文件") }
+        fileSearch.tap(); fileSearch.typeText("HLChanged.txt")
+        try tap("HLChanged.txt"); _ = try wait("修改文件")
+        _ = try wait("const greeting = \"before\";"); _ = try wait("const greeting = \"after\";"); _ = try wait("export const version = 2;")
+        capture("changes-diff")
+        try tap("返回改动文件列表")
+        let textField = app.textViews.matching(NSPredicate(format: "label CONTAINS %@", "搜索改动文件")).firstMatch
+        textField.tap(); textField.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: "HLChanged.txt".count))
+        try tap("文件改动"); Thread.sleep(forTimeInterval: 0.45)
+        try reveal(element("HLDeleted.txt"))
+        try tap("HLDeleted.txt"); _ = try wait("已删除文件"); _ = try wait("This fixture file will be deleted.")
+        try tap("返回改动文件列表")
+        let binary = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "HLBinary-")).firstMatch
+        guard binary.waitForExistence(timeout: 10) else { throw HLFailure.missingControl("HLBinary") }
+        try reveal(binary)
+        binary.tap(); _ = try wait("二进制文件发生改动")
+        try tap("返回改动文件列表")
+        let added = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "HLAdded-")).firstMatch
+        guard added.waitForExistence(timeout: 10) else { throw HLFailure.missingControl("HLAdded") }
+        try reveal(added)
+        added.tap(); _ = try wait("新增文件"); _ = try wait("A new fixture file.")
+        try tap("关闭文件改动")
+        stage("changes-verified")
     }
 
     private func verifyConversationDisclosure() throws {

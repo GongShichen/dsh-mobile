@@ -72,7 +72,10 @@ class HLInteractionsFlowTest {
 
                 fun start(mode: String): String {
                     assertEquals("Only the isolated fixture may receive QA prompts", host, remote { state.value.activeHostId })
-                    val id = remote { createSession("HL QA · $mode") }
+                    val id = if (mode == "changes") remote {
+                        val created = call("sessions.create", buildJsonObject { put("workspaceId", config.getString("workspaceId")) }).jsonObject.getValue("sessionId").jsonPrimitive.content
+                        renameSession(created, "HL QA · $mode"); refreshSessions(); selectSession(created); created
+                    } else remote { createSession("HL QA · $mode") }
                     remote { call("models.select", buildJsonObject { put("sessionId", id); put("provider", "hl-interaction-fixture"); put("model", "hl-interaction-fixture") }) }
                     if (mode == "approval") {
                         // The old implementation lost this request because a different conversation was visible.
@@ -87,14 +90,53 @@ class HLInteractionsFlowTest {
 
                 val only = InstrumentationRegistry.getArguments().getString("HL_ONLY_MODE")
                 val modes = listOf("approval", "reject", "desktop", "cancel", "reconnect", "permission", "plan", "questions", "skip", "timed")
-                require(only == null || only in modes || only == "conversation")
-                for (mode in if (only == "conversation") listOf(only) else modes.filter { only == null || it == only }) {
+                require(only == null || only in modes || only in listOf("conversation", "changes"))
+                for (mode in if (only in listOf("conversation", "changes")) listOf(requireNotNull(only)) else modes.filter { only == null || it == only }) {
                     if (mode == "permission") {
                         device.wait(Until.findObject(By.desc("菜单")), 10_000)?.click()
                         tap("设置")
                     }
                     val id = start(mode)
                     when (mode) {
+                        "changes" -> {
+                            waitText("交互验证已完成。")
+                            remote { withTimeout(20_000) { state.first { s -> io.dsh.mobile.sync.changeAnnouncements(s.messages, id).isNotEmpty() } } }
+                            device.wait(Until.findObject(By.desc("查看文件改动")), 5000)!!.click()
+                            waitText("文件改动"); revealText("HLChanged.txt"); snapshot("changes-list")
+                            // Search must preserve the original summary index, not the filtered position.
+                            device.findObject(By.clazz("android.widget.EditText")).text = "HLChanged.txt"
+                            device.wait(Until.findObject(By.text("HLChanged.txt").clazz("android.widget.TextView")), 5000)!!.click(); waitText("修改文件")
+                            waitText("const greeting = \"before\";"); waitText("const greeting = \"after\";"); waitText("export const version = 2;")
+                            snapshot("changes-diff")
+                            stage("changes-diff-visible", id)
+                            if (InstrumentationRegistry.getArguments().getString("HL_EMULATOR_VIEWPORTS") == "1") {
+                                try { device.setOrientationLeft(); Thread.sleep(900); revealText("export const version = 2;"); snapshot("changes-landscape") }
+                                finally { device.setOrientationNatural(); device.unfreezeRotation() }
+                            }
+                            device.findObject(By.desc("返回改动文件列表")).click()
+                            device.wait(Until.findObject(By.clazz("android.widget.EditText")), 5000)!!.text = ""
+                            revealText("HLDeleted.txt"); tap("HLDeleted.txt"); waitText("已删除文件"); waitText("This fixture file will be deleted.")
+                            device.findObject(By.desc("返回改动文件列表")).click()
+                            waitText("文件改动")
+                            val binary = device.wait(Until.findObject(By.textStartsWith("HLBinary-")), 5000)!!
+                            binary.click(); waitText("二进制文件发生改动")
+                            device.findObject(By.desc("返回改动文件列表")).click()
+                            waitText("文件改动")
+                            device.wait(Until.findObject(By.textStartsWith("HLAdded-")), 5000)!!.click()
+                            waitText("新增文件"); waitText("A new fixture file.")
+                            device.findObject(By.desc("关闭文件改动")).click()
+                            // Reconnect obtains the same live Host snapshot, without local file storage.
+                            remote { disconnect(); connect(host) }
+                            remote { withTimeout(40_000) { state.first { it.connected && it.selectedSessionId == id && io.dsh.mobile.sync.changeAnnouncements(it.messages, id).isNotEmpty() } } }
+                            device.wait(Until.findObject(By.desc("查看文件改动")), 5000)!!.click()
+                            revealText("HLChanged.txt"); device.findObject(By.desc("关闭文件改动")).click()
+                            // Switching the selected conversation must discard the previous file list.
+                            remote { createSession("HL QA · no file changes") }
+                            device.wait(Until.findObject(By.desc("查看文件改动")), 5000)!!.click()
+                            waitText("暂无文件改动记录"); assertFalse(device.hasObject(By.text("HLChanged.txt")))
+                            device.findObject(By.desc("关闭文件改动")).click()
+                            stage("changes-verified", id)
+                        }
                         "conversation" -> {
                             waitText("折叠过程后，这段最终回答仍然可见。")
                             waitText("我会先检查测试数据。")

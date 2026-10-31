@@ -250,14 +250,16 @@ class HLRepository(
 
     suspend fun loadHistory(sessionId: String = requireSelectedSession()) {
         val hostId = requireHost()
+        val generation = epoch
+        val session = requireRpc()
         val earliest = state.value.messages.mapNotNull { it.sequence }.minOrNull()
-        val page = requireRpc().call("sessions.events", buildJsonObject {
+        val page = session.call("sessions.events", buildJsonObject {
             put("address", buildJsonObject { put("kind", "session"); put("sessionId", sessionId) })
             if (earliest != null) put("beforeSeq", earliest)
             put("maxMessages", 100)
         }).jsonObject
         events.withLock {
-            if (state.value.selectedSessionId != sessionId || state.value.activeHostId != hostId) return@withLock
+            if (state.value.selectedSessionId != sessionId || state.value.activeHostId != hostId || generation != epoch || rpc !== session) return@withLock
             applyPresentation(page)
             reducer?.prependHistory(page)
             publishMessages(hostId, sessionId)
@@ -410,6 +412,37 @@ class HLRepository(
 
     /** Uses only the documented mobile allowlist, never arbitrary upstream endpoints. */
     suspend fun call(method: String, params: JsonObject = JsonObject(emptyMap())): JsonElement = executeCall(method, params)
+
+    /** Bind reads to the visible conversation and live transport, never to a subsequent reconnection. */
+    private suspend fun readChange(method: String, hostId: String, announcement: HLChangeAnnouncement, index: Int? = null): JsonObject {
+        val generation = epoch
+        val session = requireRpc()
+        fun current() = state.value.connected && state.value.activeHostId == hostId && state.value.selectedSessionId == announcement.sessionId && epoch == generation && rpc === session
+        if (!current()) throw CancellationException("Change view is no longer current")
+        val result = session.call(method, buildJsonObject {
+            put("sessionId", announcement.sessionId); put("seq", announcement.seq); index?.let { put("index", it) }
+        }).jsonObject
+        if (!current()) throw CancellationException("Change view is no longer current")
+        return result
+    }
+
+    suspend fun changeSummary(hostId: String, announcement: HLChangeAnnouncement): HLChangeSummary? {
+        val result = readChange("changes.summary", hostId, announcement)
+        if (result.string("status") == "unavailable") return null
+        if (result.string("status") != "available") throw HLProtocolException("桌面返回了无效的文件改动")
+        return WireJson.decodeFromJsonElement(HLChangeSummary.serializer(), result.getValue("summary")).also {
+            if (it.turn != announcement.turn || it.total < it.files.size || it.added < 0 || it.deleted < 0 || it.files.any { file -> file.added < 0 || file.deleted < 0 }) throw HLProtocolException("文件改动与对话轮次不匹配")
+        }
+    }
+
+    suspend fun changeDiff(hostId: String, ref: HLChangeFileRef): HLFileDiff? {
+        val result = readChange("changes.diff", hostId, ref.announcement, ref.index)
+        if (result.string("status") == "unavailable") return null
+        if (result.string("status") != "available") throw HLProtocolException("桌面返回了无效的文件差异")
+        return WireJson.decodeFromJsonElement(HLFileDiff.serializer(), result.getValue("diff")).also {
+            if (it.path != ref.file.path || it.kind !in setOf("text", "binary", "oversized") || (it.kind == "text" && (it.before == null || it.after == null))) throw HLProtocolException("文件差异与所选文件不匹配")
+        }
+    }
 
     suspend fun retryOperation(operationId: String): JsonElement {
         val operation = cache.operations(requireHost()).firstOrNull { it.id == operationId } ?: throw HLProtocolException("找不到待重试操作")
@@ -832,7 +865,7 @@ class HLRepository(
         val previous = rpc; rpc = null
         previous?.close()
         events.withLock { router.reset(); reducer = null; interactionReducer.reset(); questionClaims.clear(); workspaceReducer.reset(); projectionReducer.reset() }
-        mutableState.update { it.copy(interactions = emptyList(), interactionsReady = false, pendingQuestions = emptyList(), pendingQuestionsLoading = false, resolvingQuestions = emptySet()) }
+        mutableState.update { it.copy(interactions = emptyList(), interactionsReady = false, pendingQuestions = emptyList(), pendingQuestionsLoading = false, resolvingQuestions = emptySet(), connectionGeneration = epoch) }
     }
     private fun requireRpc(): HLRPCSession = rpc ?: throw HLProtocolException("请先连接桌面端")
     private suspend fun awaitConnected() {

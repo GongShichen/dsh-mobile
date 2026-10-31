@@ -38,6 +38,7 @@ fun HLApp() {
         val state by repository.state.collectAsState()
         var tab by remember { mutableStateOf(HLTab.CHATS) }
         var traceOpen by remember { mutableStateOf(false) }
+        var changesOpen by remember { mutableStateOf(false) }
         var busy by remember { mutableStateOf(false) }
         var uiError by remember { mutableStateOf<String?>(null) }
         val scope = rememberCoroutineScope()
@@ -62,6 +63,7 @@ fun HLApp() {
             (uiError ?: state.error)?.let { snackbar.showSnackbar(it); uiError = null; repository.clearError() }
         }
         if (traceOpen) HLTrajectoryDialog(state, repository, busy, run) { traceOpen = false }
+        if (changesOpen) HLChangesDialog(state, repository) { changesOpen = false }
         HLKeyboardDismissalHost {
         ModalNavigationDrawer(drawerState = drawer, drawerContent = {
             ModalDrawerSheet(modifier = Modifier.width(320.dp).fillMaxHeight(), drawerContainerColor = MaterialTheme.colorScheme.background) {
@@ -98,6 +100,7 @@ fun HLApp() {
                     HLPlatformActionButton(icon = if (tab == HLTab.CHATS) "MENU" else "BACK", label = if (tab == HLTab.CHATS) "菜单" else "返回") { dismissKeyboard(); if (tab == HLTab.CHATS) scope.launch { drawer.open() } else tab = HLTab.CHATS }
                 }, actions = {
                     if (tab == HLTab.CHATS && state.selectedSessionId != null) IconButton(onClick = { dismissKeyboard(); traceOpen = true }, modifier = Modifier.semantics { contentDescription = "查看对话轨迹" }) { HLNavigationIcon("TIMELINE", 19.dp) }
+                    if (tab == HLTab.CHATS && state.selectedSessionId != null) IconButton(onClick = { dismissKeyboard(); changesOpen = true }, modifier = Modifier.semantics { contentDescription = "查看文件改动" }) { HLNavigationIcon("DIFF", 19.dp) }
                     if (tab == HLTab.CHATS) HLPlatformActionButton(icon = "NEW_CHAT", label = "新对话", enabled = !busy) { dismissKeyboard(); if (state.connected) run { repository.createSession() } else navigate(HLTab.DEVICES) }
                 }, colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = MaterialTheme.colorScheme.background)) },
             ) { padding ->

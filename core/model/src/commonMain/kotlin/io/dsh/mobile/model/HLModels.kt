@@ -112,6 +112,7 @@ data class HLState(
     val turnPresentation: Map<Long, JsonObject> = emptyMap(),
     val jobs: List<JsonObject> = emptyList(),
     val hasMoreHistory: Boolean = false,
+    val connectionGeneration: Long = 0,
 ) {
     val connected: Boolean get() = connection == HLConnectionStatus.CONNECTED
     val activeHost: HLDesktopHost? get() = hosts.firstOrNull { it.id == activeHostId }
