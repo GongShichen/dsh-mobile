@@ -15,7 +15,7 @@ kotlin {
     }
     listOf(iosArm64(), iosSimulatorArm64()).forEach { target ->
         target.binaries.framework {
-            baseName = "DshMobile"
+            baseName = "HLShared"
             isStatic = true
             export(project(":core:transport"))
             export(project(":core:platform"))

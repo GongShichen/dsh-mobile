@@ -6,21 +6,21 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <application
-        android:name=".DshMobileApplication"
+        android:name=".HLApplication"
         android:allowBackup="false"
         android:label="Harness Link"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
         <meta-data android:name="firebase_messaging_auto_init_enabled" android:value="false" />
         <provider android:name="com.google.firebase.provider.FirebaseInitProvider" tools:node="remove" />
-        <service android:name=".DshFirebaseMessagingService" android:exported="false">
+        <service android:name=".HLFirebaseMessagingService" android:exported="false">
             <intent-filter>
                 <action android:name="com.google.firebase.MESSAGING_EVENT" />
             </intent-filter>
         </service>
-        <activity android:name=".DshScanActivity" android:exported="false" android:screenOrientation="portrait" />
+        <activity android:name=".HLScanActivity" android:exported="false" android:screenOrientation="portrait" />
         <activity
-            android:name=".MainActivity"
+            android:name=".HLMainActivity"
             android:exported="true"
             android:launchMode="singleTop"
             android:windowSoftInputMode="adjustResize"

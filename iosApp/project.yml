@@ -1,4 +1,4 @@
-name: DshMobile
+name: HLApp
 options:
   bundleIdPrefix: org.harnesslink
   deploymentTarget:
@@ -23,12 +23,12 @@ settings:
     Release:
       APS_ENVIRONMENT: production
 targets:
-  DshMobile:
+  HLApp:
     type: application
     platform: iOS
     sources:
       - path: Sources
-      - path: ../composeApp/build/xcode-generated/KotlinBuildStamp.swift
+      - path: ../composeApp/build/xcode-generated/HLKotlinBuildStamp.swift
         type: file
         optional: true
         buildPhase: sources
@@ -55,14 +55,14 @@ targets:
         UIBackgroundModes:
           - remote-notification
     entitlements:
-      path: DshMobile.entitlements
+      path: HLApp.entitlements
       properties:
         aps-environment: "$(APS_ENVIRONMENT)"
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: org.harnesslink.app
-        PRODUCT_NAME: DshMobile
-        PRODUCT_MODULE_NAME: DshMobileApp
+        PRODUCT_NAME: HLApp
+        PRODUCT_MODULE_NAME: HLApp
         MARKETING_VERSION: 0.1.0
         CURRENT_PROJECT_VERSION: 1
         TARGETED_DEVICE_FAMILY: "1,2"
@@ -75,7 +75,7 @@ targets:
     dependencies:
       - package: Iroh
         product: IrohLib
-      - framework: ../composeApp/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)/DshMobile.framework
+      - framework: ../composeApp/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)/HLShared.framework
         embed: false
         link: true
     preBuildScripts:
@@ -84,40 +84,40 @@ targets:
           set -eu
           cd "$SRCROOT/.."
           ./gradlew :composeApp:embedAndSignAppleFrameworkForXcode
-          framework="$SRCROOT/../composeApp/build/xcode-frameworks/$CONFIGURATION/$SDK_NAME/DshMobile.framework/DshMobile"
-          stamp="$SRCROOT/../composeApp/build/xcode-generated/KotlinBuildStamp.swift"
+          framework="$SRCROOT/../composeApp/build/xcode-frameworks/$CONFIGURATION/$SDK_NAME/HLShared.framework/HLShared"
+          stamp="$SRCROOT/../composeApp/build/xcode-generated/HLKotlinBuildStamp.swift"
           mkdir -p "$(dirname "$stamp")"
           fingerprint=$(shasum -a 256 "$framework" | cut -d ' ' -f 1)
-          printf 'internal enum DshKotlinBuildStamp { static let sha256 = "%s" }\n' "$fingerprint" > "$stamp.tmp"
+          printf 'internal enum HLKotlinBuildStamp { static let sha256 = "%s" }\n' "$fingerprint" > "$stamp.tmp"
           if ! cmp -s "$stamp.tmp" "$stamp"; then mv "$stamp.tmp" "$stamp"; else rm "$stamp.tmp"; fi
         basedOnDependencyAnalysis: false
         outputFiles:
-          - "$(SRCROOT)/../composeApp/build/xcode-generated/KotlinBuildStamp.swift"
-  DshMobileUITests:
+          - "$(SRCROOT)/../composeApp/build/xcode-generated/HLKotlinBuildStamp.swift"
+  HLAppUITests:
     type: bundle.ui-testing
     platform: iOS
     sources:
       - path: Tests
     dependencies:
-      - target: DshMobile
+      - target: HLApp
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: org.harnesslink.app.uitests
         GENERATE_INFOPLIST_FILE: YES
-        TEST_TARGET_NAME: DshMobile
+        TEST_TARGET_NAME: HLApp
         TARGETED_DEVICE_FAMILY: "1,2"
 schemes:
-  DshMobile:
+  HLApp:
     build:
       targets:
-        DshMobile: all
-        DshMobileUITests: [test]
+        HLApp: all
+        HLAppUITests: [test]
     run:
       config: Debug
     test:
       config: Debug
       targets:
-        - name: DshMobileUITests
+        - name: HLAppUITests
           parallelizable: false
           randomExecutionOrder: false
       environmentVariables:

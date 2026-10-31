@@ -19,7 +19,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.94.1
         with:
           targets: aarch64-linux-android
-      - run: IROH_ANDROID_TARGETS=aarch64-linux-android scripts/build-iroh-android.sh
+      - run: IROH_ANDROID_TARGETS=aarch64-linux-android scripts/HLBuildIrohAndroid.sh
       - run: ./gradlew :androidApp:assembleDebug :core:database:testAndroidHostTest :core:protocol:testAndroidHostTest :core:sync:testAndroidHostTest
       - uses: actions/upload-artifact@v4
         with:
@@ -40,4 +40,4 @@ jobs:
         with:
           xcode-version: '26.5'
       - run: brew install xcodegen
-      - run: scripts/build-ios.sh
+      - run: scripts/HLBuildIOS.sh

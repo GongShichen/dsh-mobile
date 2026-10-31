@@ -40,7 +40,7 @@ kotlin {
 
 sqldelight {
     databases {
-        create("MobileDatabase") {
+        create("HLDatabase") {
             packageName.set("io.dsh.mobile.database.generated")
         }
     }

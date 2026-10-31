@@ -10,7 +10,7 @@ val verifyIrohAndroidNative by tasks.registering {
     doLast {
         val library = layout.projectDirectory.file("src/androidMain/jniLibs/arm64-v8a/libiroh_ffi.so").asFile
         check(library.isFile && library.length() > 0) {
-            "Missing iroh Android native library. Run scripts/build-iroh-android.sh before assembling the APK."
+            "Missing iroh Android native library. Run scripts/HLBuildIrohAndroid.sh before assembling the APK."
         }
     }
 }

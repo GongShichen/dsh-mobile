@@ -43,7 +43,7 @@ Compose 当前依赖要求 compileSdk 37，因此构建 SDK 高于 targetSdk。X
 ```bash
 git clone --recurse-submodules git@github.com:GongShichen/dsh-mobile.git
 cd dsh-mobile
-scripts/doctor.sh
+scripts/HLDoctor.sh
 ```
 
 ### Android
@@ -52,8 +52,8 @@ scripts/doctor.sh
 
 ```bash
 git submodule update --init --recursive
-scripts/build-iroh-android.sh
-scripts/build-android.sh
+scripts/HLBuildIrohAndroid.sh
+scripts/HLBuildAndroid.sh
 ```
 
 构建产物位于 `androidApp/build/outputs/apk/debug/androidApp-debug.apk`。完整构建会检查原生库存在，缺少 `.so` 时明确失败。
@@ -61,7 +61,7 @@ scripts/build-android.sh
 本机已验证的 NDK 为 `27.0.12077973`。若需要显式指定：
 
 ```bash
-ANDROID_NDK_HOME="$HOME/Library/Android/sdk/ndk/27.0.12077973" scripts/build-iroh-android.sh
+ANDROID_NDK_HOME="$HOME/Library/Android/sdk/ndk/27.0.12077973" scripts/HLBuildIrohAndroid.sh
 ```
 
 原生库按 16 KiB 页大小构建。具体原生架构与测试见 [transport 文档](core/transport/README.md)。
@@ -71,35 +71,35 @@ ANDROID_NDK_HOME="$HOME/Library/Android/sdk/ndk/27.0.12077973" scripts/build-iro
 模拟器构建：
 
 ```bash
-scripts/build-ios.sh
+scripts/HLBuildIOS.sh
 ```
 
 该脚本构建 arm64 模拟器版本，并使用本地临时签名，确保系统钥匙串正常工作；不需要使用开发者证书。不要为模拟器传入 `CODE_SIGNING_ALLOWED=NO`，否则持久设备身份会因缺少模拟器权限而无法保存。
 
-模拟器产物位于 `.local/DerivedData/Build/Products/Debug-iphonesimulator/DshMobile.app`。可重复运行原生页面测试：
+模拟器产物位于 `.local/DerivedData/Build/Products/Debug-iphonesimulator/HLApp.app`。可重复运行原生页面测试：
 
 ```bash
-DSH_IOS_SIMULATOR_ID=<模拟器 UUID> scripts/test-ios.sh
+DSH_IOS_SIMULATOR_ID=<模拟器 UUID> scripts/HLTestIOS.sh
 ```
 
 个人签名真机构建需要先在 Xcode 完成许可与账号设置，选择自己的开发者团队，并为目标设备准备有效的开发签名和 provisioning profile。脚本不选择默认 Team、不创建账号或密钥，也不自动更新 provisioning。查看设备标识可运行 `xcrun devicectl list devices`。
 
 ```bash
 export DSH_DEVELOPMENT_TEAM=YOURTEAMID
-scripts/build-ios-device.sh
+scripts/HLBuildIOSDevice.sh
 
 # 明确指定设备后构建并安装；需要设备已配对、解锁并开启 Developer Mode。
-scripts/build-ios-device.sh --device YOUR_DEVICE_ID --install
+scripts/HLBuildIOSDevice.sh --device YOUR_DEVICE_ID --install
 
 # 可选：归档并导出个人调试 IPA；仍使用 Debug 配置和 development APNs entitlement。
-scripts/build-ios-device.sh --export-ipa
+scripts/HLBuildIOSDevice.sh --export-ipa
 ```
 
-真机 `.app` 默认输出到 `.local/ios-device/DerivedData/Build/Products/Debug-iphoneos/DshMobile.app`；`--archive` 输出 `.local/ios-device/DshMobile.xcarchive`，`--export-ipa` 使用 Xcode 的 `debugging` 导出方式并将 IPA 放在 `.local/ios-device/ipa`。已有构建也可手动安装：
+真机 `.app` 默认输出到 `.local/ios-device/DerivedData/Build/Products/Debug-iphoneos/HLApp.app`；`--archive` 输出 `.local/ios-device/HLApp.xcarchive`，`--export-ipa` 使用 Xcode 的 `debugging` 导出方式并将 IPA 放在 `.local/ios-device/ipa`。已有构建也可手动安装：
 
 ```bash
 xcrun devicectl device install app --device YOUR_DEVICE_ID \
-  .local/ios-device/DerivedData/Build/Products/Debug-iphoneos/DshMobile.app
+  .local/ios-device/DerivedData/Build/Products/Debug-iphoneos/HLApp.app
 ```
 
 若默认 Bundle ID 无法用于自己的团队，可通过 `DSH_IOS_BUNDLE_ID` 指定已配置的个人 Bundle ID。个人推送必须使用与安装包签名匹配的 Team、Bundle ID、APNs key 和环境；开发与发布 token 不混用。APNs 能力需要支持该能力的开发者账号与签名配置，不能把免费 Personal Team 当作完整推送开发环境。SwiftPM 精确锁定官方 IrohLib 1.2.0。签名分发流程见 [Apple 注册设备分发说明](https://developer.apple.com/documentation/xcode/distributing-your-app-to-registered-devices)。
@@ -126,7 +126,7 @@ iOS 26 及以上使用系统原生 Liquid Glass 导航和发送按钮；低版�
 免费 Personal Team 测试可使用：
 
 ```bash
-DSH_DEVELOPMENT_TEAM=YOURTEAMID scripts/build-ios-device.sh --personal-team --device YOUR_DEVICE_ID --install
+DSH_DEVELOPMENT_TEAM=YOURTEAMID scripts/HLBuildIOSDevice.sh --personal-team --device YOUR_DEVICE_ID --install
 ```
 
 此构建保留 P2P 和聊天，明确关闭免费团队不支持的 APNs 权限。`DSH_IOS_DERIVED_DATA` 可指向已有的构建缓存目录。
@@ -162,3 +162,5 @@ DSH_DEVELOPMENT_TEAM=YOURTEAMID scripts/build-ios-device.sh --personal-team --de
 Android 日志标签为 `HarnessLink` 和 `HarnessLink-P2P`，记录扫码、连接、确认、订阅和错误码；不记录邀请密钥、令牌或聊天正文。iOS 使用相同的脱敏诊断输出。
 
 对已配置的真机运行应用 UI 测试时，先 `assembleDebugAndroidTest`，再通过 `adb install -r -t` 与 `adb shell am instrument` 直接运行测试。不要对日常使用的安装执行会自动卸载目标 App 的 Gradle connected 测试任务。扫码测试图片是固定虚构数据，只进入测试 APK。
+
+Source naming conventions: [HL naming](docs/HLNaming.md).
