@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		070EA3DEE33F8421FB2DDBAB /* iroh-Apache-2.0.txt in Resources */ = {isa = PBXBuildFile; fileRef = E6EBF1306C6716D0A12A6A3C /* iroh-Apache-2.0.txt */; };
 		1727BBD5939C299A02A57DE6 /* HLIrohBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D7B952ADAF943160DB7AA9D /* HLIrohBridge.swift */; };
+		17CEEE5DC3C6EBC1A6621B55 /* HLIOSInteractionFlowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36480D1BAEC666F96917D6B4 /* HLIOSInteractionFlowTests.swift */; };
 		2DD961D4AD05ADA4B5286FF6 /* HLIOSPushCapability.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1C2EDBD0CF76FE519EE6A27 /* HLIOSPushCapability.swift */; };
 		5D7088F49140BE47EFD5D8AE /* HLAppUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 511AC8447027AB819DDB4574 /* HLAppUITests.swift */; };
 		62BA7DCCD3DA83A129627DBE /* HLApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD5658A0C6ADDFABE5A98B03 /* HLApp.swift */; };
@@ -35,6 +36,7 @@
 /* Begin PBXFileReference section */
 		1103561A419E046D5C858B4C /* HLAssets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = HLAssets.xcassets; sourceTree = "<group>"; };
 		23A6A7400A72A2E068FD58E1 /* HLIOSGlassButtons.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HLIOSGlassButtons.swift; sourceTree = "<group>"; };
+		36480D1BAEC666F96917D6B4 /* HLIOSInteractionFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HLIOSInteractionFlowTests.swift; sourceTree = "<group>"; };
 		3D7B952ADAF943160DB7AA9D /* HLIrohBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HLIrohBridge.swift; sourceTree = "<group>"; };
 		4F9B5CE25F1E8166951F5D0E /* HLIOSPlatformServices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HLIOSPlatformServices.swift; sourceTree = "<group>"; };
 		511AC8447027AB819DDB4574 /* HLAppUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HLAppUITests.swift; sourceTree = "<group>"; };
@@ -66,6 +68,7 @@
 			isa = PBXGroup;
 			children = (
 				511AC8447027AB819DDB4574 /* HLAppUITests.swift */,
+				36480D1BAEC666F96917D6B4 /* HLIOSInteractionFlowTests.swift */,
 			);
 			path = Tests;
 			sourceTree = "<group>";
@@ -280,6 +283,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				5D7088F49140BE47EFD5D8AE /* HLAppUITests.swift in Sources */,
+				17CEEE5DC3C6EBC1A6621B55 /* HLIOSInteractionFlowTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

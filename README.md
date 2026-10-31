@@ -121,6 +121,18 @@ xcrun devicectl device install app --device YOUR_DEVICE_ID \
 
 第一组是协议和状态合并测试；第二组需要模拟器或设备，使用真实 Android JNI/QUIC 而非假传输。iOS Kotlin 编译与最终 Xcode 链接是不同验证步骤，结果记录在 [验证说明](docs/VALIDATION.md)。
 
+日常回归优先使用 Android Emulator 和 iOS Simulator，通过设备页的“或粘贴配对链接”连接真实 Mac DSH。二维码与配对链接使用同一套邀请、桌面确认、身份认证和 P2P 同步逻辑；模拟器不需要模型密钥或独立服务端。
+
+iOS 基础输入和导航回归：
+
+```sh
+DSH_IOS_SIMULATOR_ID=<已启动的模拟器UUID> scripts/HLTestIOS.sh
+```
+
+完整审批/问答回归使用 `iosApp/Tests/HLIOSInteractionFlowTests.swift`，由插件仓库的 `scripts/HLRunIOSInteractionQA.mjs --simulator <UUID> --xctestrun <对应的模拟器测试产物>` 驱动。测试走 App 的配对链接输入、实际 Swift/iroh 和官方 DSH 接口；测试模型只产生无副作用的交互请求。隔离 Host、构建和运行步骤见插件仓库 `docs/HLInteractions.md`。
+
+真实相机扫码、系统推送送达、后台限制与蜂窝/复杂 NAT 网络另做真机验收。模拟器测试结果按模拟器记录，不能替代这些设备能力的验收。
+
 ## 移动界面
 
 以 DeepSeek 移动端的对话界面为参考：侧边抽屉管理历史会话，底部统一输入框。消息正文使用原生 GFM 渲染，支持列表、引用、链接、表格、代码复制；思考与工具使用中性色折叠行，流式思考和正文分别合并。
