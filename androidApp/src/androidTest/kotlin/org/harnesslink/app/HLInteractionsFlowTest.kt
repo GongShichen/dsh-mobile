@@ -36,6 +36,13 @@ class HLInteractionsFlowTest {
     private fun waitText(text: String, timeout: Long = 30_000) = device.wait(Until.findObject(By.text(text)), timeout)
         ?: throw AssertionError("Expected interaction control: $text")
     private fun tap(text: String) { waitText(text).click() }
+    private fun revealText(text: String) {
+        if (!device.hasObject(By.text(text))) {
+            device.findObjects(By.scrollable(true)).firstOrNull { it.className != "android.widget.EditText" }
+                ?.scrollUntil(Direction.DOWN, Until.hasObject(By.text(text)))
+        }
+        waitText(text)
+    }
     private fun gone() {
         assertTrue("The answered/cancelled dialog must close", device.wait(Until.gone(By.text("稍后处理")), 15_000))
     }
@@ -80,14 +87,44 @@ class HLInteractionsFlowTest {
 
                 val only = InstrumentationRegistry.getArguments().getString("HL_ONLY_MODE")
                 val modes = listOf("approval", "reject", "desktop", "cancel", "reconnect", "permission", "plan", "questions", "skip", "timed")
-                require(only == null || only in modes)
-                for (mode in modes.filter { only == null || it == only }) {
+                require(only == null || only in modes || only == "conversation")
+                for (mode in if (only == "conversation") listOf(only) else modes.filter { only == null || it == only }) {
                     if (mode == "permission") {
                         device.wait(Until.findObject(By.desc("菜单")), 10_000)?.click()
                         tap("设置")
                     }
                     val id = start(mode)
                     when (mode) {
+                        "conversation" -> {
+                            waitText("折叠过程后，这段最终回答仍然可见。")
+                            waitText("我会先检查测试数据。")
+                            val status = device.wait(Until.findObject(By.descContains("第 1 轮执行过程")), 10_000)
+                            assertNotNull(status)
+                            val group = By.descContains("过程分组，已调用工具")
+                            assertFalse(device.hasObject(group))
+                            snapshot("process-outer-collapsed")
+                            status.click(); assertTrue(device.wait(Until.hasObject(group), 5000))
+                            assertFalse(device.hasObject(By.desc("思考内容")))
+                            snapshot("process-group-collapsed")
+                            device.findObject(group).click(); waitText("hl_interaction_fixture")
+                            val thought = device.wait(Until.findObject(By.desc("思考内容")), 5000)
+                            assertNotNull(thought); thought.click()
+                            revealText("思考细节：工具已返回可验证的数据。")
+                            snapshot("process-expanded")
+                            device.findObject(group).click(); assertTrue(device.wait(Until.gone(By.desc("思考内容")), 5000))
+                            waitText("折叠过程后，这段最终回答仍然可见。")
+                            device.findObject(group).click(); revealText("思考细节：工具已返回可验证的数据。")
+                            status.click(); assertTrue(device.wait(Until.gone(group), 5000))
+                            waitText("我会先检查测试数据。"); waitText("折叠过程后，这段最终回答仍然可见。")
+                            status.click(); assertTrue(device.wait(Until.hasObject(group), 5000))
+                            assertFalse(device.hasObject(By.desc("思考内容")))
+                            status.click()
+                            if (InstrumentationRegistry.getArguments().getString("HL_EMULATOR_VIEWPORTS") == "1") {
+                                try { device.setOrientationLeft(); Thread.sleep(900); revealText("折叠过程后，这段最终回答仍然可见。"); snapshot("process-landscape") }
+                                finally { device.setOrientationNatural(); device.unfreezeRotation() }
+                            }
+                            stage("process-disclosures-verified", id)
+                        }
                         "approval" -> {
                             waitText("允许这一次"); snapshot("approval"); waitText("来自：HL QA · approval")
                             tap("允许这一次"); gone(); stage("phone-approved", id)

@@ -9,11 +9,16 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import io.dsh.mobile.model.HLState
 import io.dsh.mobile.platform.formatMessageTime
 import io.dsh.mobile.sync.HLRepository
+import io.dsh.mobile.design.HLDisclosureButton
 import kotlinx.serialization.json.*
 import kotlin.math.roundToLong
 
@@ -21,7 +26,7 @@ internal fun JsonObject.number(key: String): Long? = (this[key] as? JsonPrimitiv
 internal fun JsonObject.flag(key: String): Boolean = (this[key] as? JsonPrimitive)?.booleanOrNull == true
 internal fun durationText(ms: Long): String {
     val seconds = (ms.coerceAtLeast(0) / 1000)
-    return when { seconds >= 3600 -> "${seconds / 3600} 小时 ${seconds / 60 % 60} 分 ${seconds % 60} 秒"; seconds >= 60 -> "${seconds / 60} 分 ${seconds % 60} 秒"; else -> "$seconds 秒" }
+    return when { seconds >= 3600 -> "${seconds / 3600}小时${seconds / 60 % 60}分${seconds % 60}秒"; seconds >= 60 -> "${seconds / 60}分${seconds % 60}秒"; else -> "${seconds}秒" }
 }
 private fun compactCount(value: Long): String = when {
     value >= 1_000_000 -> "${(value / 100_000.0).roundToLong() / 10.0}M"
@@ -30,14 +35,24 @@ private fun compactCount(value: Long): String = when {
 }
 
 @Composable
-internal fun HLTurnStatus(presentation: JsonObject) {
+internal fun HLTurnStatus(presentation: JsonObject, turn: Long? = null, expanded: Boolean? = null, onToggle: (() -> Unit)? = null) {
     val status = presentation.string("status")
-    val title = when (status) { "failed" -> "运行失败"; "stopped" -> "已停止"; else -> "已完成" }
+    val title = when (status) { "failed" -> "处理失败"; "stopped" -> "已停止"; else -> "已完成" }
     val duration = presentation.number("durationMs")?.takeIf { status == "completed" }?.coerceAtLeast(1000)
+    val label = title + (duration?.let { "，用时 ${durationText(it)}" } ?: "")
+    val color = if (status == "failed") MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+    val rotation by animateFloatAsState(if (expanded == true) 180f else 0f, tween(160))
     Column(Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 6.dp)) {
-        Text(title + (duration?.let { "，用时 ${durationText(it)}" } ?: ""), style = MaterialTheme.typography.bodyMedium,
-            color = if (status == "failed") MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
-        HorizontalDivider(Modifier.padding(top = 10.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .5f))
+        if (onToggle != null) HLDisclosureButton(onClick = onToggle, contentColor = color,
+            contentPadding = PaddingValues(vertical = 8.dp), modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).semantics {
+                contentDescription = (turn?.let { "第 $it 轮执行过程，" } ?: "本轮执行过程，") + label
+                stateDescription = if (expanded == true) "已展开" else "已收起"
+            }) {
+            Text(label, modifier = Modifier.weight(1f, fill = false), style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Spacer(Modifier.width(4.dp))
+            Box(Modifier.graphicsLayer { rotationZ = rotation }) { HLNavigationIcon("DOWN", 14.dp) }
+        } else Text(label, style = MaterialTheme.typography.bodyMedium, color = color, modifier = Modifier.padding(vertical = 8.dp))
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .5f))
     }
 }
 

@@ -11,6 +11,7 @@ final class HLIOSInteractionFlowTests: XCTestCase {
         let hostNames: [String: String]
         let modes: [String]
         let restoreOnly: Bool?
+        let conversationTitle: String?
     }
     private enum HLFailure: Error { case missingControl(String), invalidState(String) }
     private let app = XCUIApplication()
@@ -124,9 +125,10 @@ final class HLIOSInteractionFlowTests: XCTestCase {
             for mode in config.modes {
                 if ["permission", "questions"].contains(mode) && element("菜单").exists { try tap("菜单"); try tap("设置") }
                 stage("request:\(mode)")
-                if !["questions", "skip", "timed"].contains(mode) { _ = try wait("来自：HL QA · \(mode)") }
+                if !["questions", "skip", "timed", "conversation"].contains(mode) { _ = try wait("来自：HL QA · \(mode)") }
                 Thread.sleep(forTimeInterval: 0.35) // Let the previous modal finish dismissing before tapping the new request.
                 switch mode {
+                case "conversation": try verifyConversationDisclosure()
                 case "approval":
                     _ = try wait("允许这一次"); _ = try wait("来自：HL QA · approval")
                     capture("approval"); try tap("允许这一次"); try awaitClosed()
@@ -178,6 +180,46 @@ final class HLIOSInteractionFlowTests: XCTestCase {
             }
             stage("complete")
         } catch { capture("failure"); throw error }
+    }
+
+    private func verifyConversationDisclosure() throws {
+        try tap("菜单")
+        let search = app.textViews.matching(NSPredicate(format: "label CONTAINS %@", "搜索对话")).firstMatch
+        guard search.waitForExistence(timeout: 10) else { throw HLFailure.missingControl("搜索对话") }
+        let name = configuration?.conversationTitle ?? "HL QA · conversation"
+        search.tap(); search.typeText(name)
+        try tap(name)
+        _ = try wait("折叠过程后，这段最终回答仍然可见。")
+        _ = try wait("我会先检查测试数据。")
+        let status = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "第 1 轮执行过程")).firstMatch
+        guard status.waitForExistence(timeout: 10), status.value as? String == "已收起" else { throw HLFailure.invalidState("Completed process should start folded") }
+        let group = app.buttons.matching(NSPredicate(format: "label CONTAINS %@ AND label CONTAINS %@", "过程分组", "已调用工具")).firstMatch
+        guard !group.exists else { throw HLFailure.invalidState("The whole process must be hidden") }
+        capture("process-outer-collapsed")
+        status.tap()
+        guard group.waitForExistence(timeout: 5), group.value as? String == "已收起" else { throw HLFailure.invalidState("The process group should remain individually folded") }
+        capture("process-group-collapsed")
+        group.tap()
+        _ = try wait("hl_interaction_fixture")
+        let thought = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "思考内容")).firstMatch
+        guard thought.waitForExistence(timeout: 5) else { throw HLFailure.missingControl("思考内容") }
+        thought.tap()
+        _ = try wait("思考细节：工具已返回可验证的数据。")
+        capture("process-expanded")
+        group.tap()
+        let hidden = XCTNSPredicateExpectation(predicate: NSPredicate { _ , _ in !thought.exists }, object: nil)
+        guard XCTWaiter.wait(for: [hidden], timeout: 5) == .completed else { throw HLFailure.invalidState("Group collapse did not hide its members") }
+        _ = try wait("折叠过程后，这段最终回答仍然可见。")
+        group.tap()
+        _ = try wait("思考细节：工具已返回可验证的数据。")
+        status.tap()
+        let hiddenGroups = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in !group.exists }, object: nil)
+        guard XCTWaiter.wait(for: [hiddenGroups], timeout: 5) == .completed else { throw HLFailure.invalidState("Turn collapse did not hide the process groups") }
+        _ = try wait("我会先检查测试数据。")
+        _ = try wait("折叠过程后，这段最终回答仍然可见。")
+        status.tap()
+        guard group.waitForExistence(timeout: 5), group.value as? String == "已收起" else { throw HLFailure.invalidState("Turn collapse should reset nested disclosure") }
+        status.tap()
     }
 
     override func tearDownWithError() throws {

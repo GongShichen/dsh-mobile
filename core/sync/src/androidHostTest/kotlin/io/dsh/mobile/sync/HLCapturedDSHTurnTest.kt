@@ -40,5 +40,13 @@ class HLCapturedDSHTurnTest {
         val human = reducer.messages.single { it.role == "user" }
         assertEquals("mobile-smoke-request-1", human.raw.obj("data")?.obj("source")?.string("rpcId"))
         assertTrue(fixture.array("interactions").any { it.jsonObject.string("type") == "waterfall" && it.jsonObject.string("event") == "approval/request" })
+        val timeline = HLConversationProjector().project(reducer.messages, emptyMap(), false)
+        assertEquals(1, timeline.groups.size)
+        val hidden = visibleConversationRows(timeline, emptySet(), emptySet())
+        assertFalse(hidden.any { it.process })
+        assertEquals("Mobile round trip verified.", hidden.last { it.message?.role == "assistant" }.message?.text)
+        val shown = visibleConversationRows(timeline, timeline.turns.keys, timeline.groups.keys)
+        assertEquals(1, shown.count { it.message?.raw?.string("type") == "tool/call" })
+        assertEquals(2, shown.count { it.process && it.message?.role == "assistant" })
     }
 }

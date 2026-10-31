@@ -4,10 +4,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.gestures.scrollBy
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -19,7 +17,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -28,7 +25,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import io.dsh.mobile.sync.canonicalAssistantBlocks
 import io.dsh.mobile.sync.reasoningDisplayText
 import io.dsh.mobile.sync.reasoningSummary
+import io.dsh.mobile.sync.HLConversationProjector
+import io.dsh.mobile.sync.HLConversationRowKind
+import io.dsh.mobile.sync.visibleConversationRows
+import androidx.compose.animation.core.tween
 import io.dsh.mobile.design.HLBrandMark
+import io.dsh.mobile.design.HLDisclosureButton
 import io.dsh.mobile.design.HLPlatformActionButton
 import androidx.compose.ui.unit.dp
 import io.dsh.mobile.design.keyboardInputArea
@@ -48,12 +50,12 @@ fun HLChatScreen(state: HLState, repository: HLRepository, busy: Boolean, run: H
     var attachmentMenu by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val list = rememberLazyListState()
-    val results = state.messages.filter { it.raw.string("type") == "tool/result" }.associateBy { toolResultId(it) }
-    val calls = state.messages.filter { it.raw.string("type") == "tool/call" }.mapNotNull { it.raw.obj("data")?.get("callId")?.let { value -> (value as? JsonPrimitive)?.contentOrNull } }.toSet()
-    val turnStart = state.messages.lastOrNull { it.raw.string("type") == "turn/start" }?.sequence
-    val turnEnd = state.messages.lastOrNull { it.raw.string("type") == "turn/end" }?.sequence ?: -1
-    val activeTurn = state.selectedSession?.running == true && turnStart != null && turnStart > turnEnd
-    val messages = state.messages.filter { it.role in setOf("user", "assistant") || it.raw.string("type") in setOf("tool/call", "step/error", "turn/error", "turn/end") || (it.raw.string("type") == "tool/result" && toolResultId(it) !in calls) }
+    val projector = remember(state.activeHostId, state.selectedSessionId) { HLConversationProjector() }
+    val disclosure = remember(state.activeHostId, state.selectedSessionId) { HLConversationDisclosure() }
+    val timeline = projector.project(state.messages, state.turnPresentation, state.selectedSession?.running == true)
+    val rows = visibleConversationRows(timeline,
+        timeline.turns.values.filter(disclosure::turnOpen).map { it.key }.toSet(),
+        timeline.groups.values.filter(disclosure::groupOpen).map { it.key }.toSet())
     var followTail by remember(state.selectedSessionId) { mutableStateOf(true) }
     val dragging by list.interactionSource.collectIsDraggedAsState()
     LaunchedEffect(dragging) { if (dragging) followTail = false }
@@ -62,9 +64,9 @@ fun HLChatScreen(state: HLState, repository: HLRepository, busy: Boolean, run: H
             if (!scrolling && !list.canScrollForward) followTail = true
         }
     }
-    LaunchedEffect(messages.size, messages.lastOrNull()?.text?.length, messages.lastOrNull()?.revision) {
-        if (followTail && !dragging && messages.isNotEmpty()) {
-            list.scrollToItem((messages.size - 1).coerceAtLeast(0))
+    LaunchedEffect(state.messages.size, state.messages.lastOrNull()?.text?.length, state.messages.lastOrNull()?.revision) {
+        if (followTail && !dragging && rows.isNotEmpty()) {
+            list.scrollToItem((rows.size - 1 + if (state.hasMoreHistory) 1 else 0).coerceAtLeast(0))
             withFrameNanos { }
             val last = list.layoutInfo.visibleItemsInfo.lastOrNull()
             if (last != null) list.scrollBy((last.offset + last.size - list.layoutInfo.viewportEndOffset).coerceAtLeast(0).toFloat())
@@ -73,18 +75,25 @@ fun HLChatScreen(state: HLState, repository: HLRepository, busy: Boolean, run: H
     Column(Modifier.fillMaxSize().imePadding()) {
         LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = list, contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(0.dp)) {
             if (state.hasMoreHistory) item { TextButton(enabled = !busy, onClick = { run { repository.loadHistory() } }, modifier = Modifier.fillMaxWidth()) { Text("加载更早的消息") } }
-            if (messages.isEmpty()) item { Column(Modifier.fillMaxWidth().padding(top = 72.dp, bottom = 32.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) { HLBrandMark(Modifier.size(72.dp)); Text(if (state.hosts.isEmpty()) "有什么可以帮你？" else "继续你的想法", style = MaterialTheme.typography.titleLarge); Text(if (state.hosts.isEmpty()) "连接电脑，继续对话与任务。" else "从一个问题开始，或让电脑继续完成任务。", style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.widthIn(max = 280.dp)); if (state.hosts.isEmpty()) TextButton(onClick = onConnect) { Text("添加电脑") } } }
-            itemsIndexed(messages, key = { _, message -> message.presentationId ?: message.id }) { index, message ->
-                val previous = messages.getOrNull(index - 1)
-                val presentation = message.raw.obj("data")?.number("turn")?.let { state.turnPresentation[it] }
-                val lastReply = presentation == null && message.role == "assistant" && !message.streaming && message.text.isNotBlank()
-                    && (messages.getOrNull(index + 1) == null || messages.getOrNull(index + 1)?.role == "user")
-                Box(Modifier.padding(top = when { index == 0 -> 0.dp; message.role == "user" -> 24.dp; previous?.role == "user" -> 16.dp; else -> 2.dp })) {
-                    if (message.raw.string("type") == "turn/end") {
-                        presentation?.let { Column { if (it.number("firstAssistantSeq") == null) HLTurnStatus(it); HLTurnActions(it, state, repository, busy, run) } }
-                    } else Column {
-                        if (presentation != null && message.sequence == presentation.number("firstAssistantSeq")) HLTurnStatus(presentation)
-                        HLMessageCard(message, results[(message.raw.obj("data")?.get("callId") as? JsonPrimitive)?.contentOrNull], activeTurn && (message.sequence ?: -1) > (turnStart ?: Long.MAX_VALUE), lastReply)
+            if (rows.isEmpty()) item { Column(Modifier.fillMaxWidth().padding(top = 72.dp, bottom = 32.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) { HLBrandMark(Modifier.size(72.dp)); Text(if (state.hosts.isEmpty()) "有什么可以帮你？" else "继续你的想法", style = MaterialTheme.typography.titleLarge); Text(if (state.hosts.isEmpty()) "连接电脑，继续对话与任务。" else "从一个问题开始，或让电脑继续完成任务。", style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.widthIn(max = 280.dp)); if (state.hosts.isEmpty()) TextButton(onClick = onConnect) { Text("添加电脑") } } }
+            itemsIndexed(rows, key = { _, row -> row.key }) { index, row ->
+                val turn = timeline.turns[row.turnKey]
+                val previous = rows.getOrNull(index - 1)
+                Box(Modifier.animateItem(fadeInSpec = tween(140), fadeOutSpec = tween(100), placementSpec = tween(180))
+                    .padding(start = if (row.process) 18.dp else 0.dp,
+                        top = when { index == 0 -> 0.dp; row.message?.role == "user" -> 24.dp; previous?.message?.role == "user" -> 16.dp; else -> 2.dp })) {
+                    when (row.kind) {
+                        HLConversationRowKind.TURN_HEADER -> turn?.presentation?.let { presentation ->
+                            HLTurnStatus(presentation, turn.number, if (turn.foldable) disclosure.turnOpen(turn) else null,
+                                if (turn.foldable) ({ followTail = false; disclosure.toggleTurn(turn, timeline) }) else null)
+                        }
+                        HLConversationRowKind.PROCESS_HEADER -> timeline.groups[row.groupKey]?.let { group ->
+                            HLProcessGroupHeader(group, disclosure.groupOpen(group)) { followTail = false; disclosure.groups[group.key] = !disclosure.groupOpen(group) }
+                        }
+                        HLConversationRowKind.TURN_ACTIONS -> turn?.presentation?.let { HLTurnActions(it, state, repository, busy, run) }
+                        HLConversationRowKind.MESSAGE -> row.message?.let { message ->
+                            HLMessageCard(message, row.toolResult, turn?.running == true, row.copyReply, disclosure, "${row.turnKey}|${row.key}")
+                        }
                     }
                 }
             }
@@ -128,10 +137,8 @@ fun HLChatScreen(state: HLState, repository: HLRepository, busy: Boolean, run: H
     }
 }
 
-private fun toolResultId(message: HLMessageRecord): String? = ((message.raw.obj("data")?.obj("message")?.get("toolCallId") ?: message.raw.obj("data")?.get("callId")) as? JsonPrimitive)?.contentOrNull
-
 @Composable
-private fun HLMessageCard(message: HLMessageRecord, toolResult: HLMessageRecord?, sessionRunning: Boolean, showActions: Boolean) {
+private fun HLMessageCard(message: HLMessageRecord, toolResult: HLMessageRecord?, sessionRunning: Boolean, showActions: Boolean, disclosure: HLConversationDisclosure, disclosureKey: String) {
     val user = message.role == "user"
     val eventType = message.raw.string("type")
     val content = message.raw.obj("data")?.obj("message")?.array("content").orEmpty()
@@ -139,18 +146,19 @@ private fun HLMessageCard(message: HLMessageRecord, toolResult: HLMessageRecord?
     val key = message.presentationId ?: message.id
     Column(Modifier.fillMaxWidth(), horizontalAlignment = if (user) Alignment.End else Alignment.Start, verticalArrangement = Arrangement.spacedBy(6.dp)) {
         if (message.role == "event") {
-            var expanded by remember(key) { mutableStateOf(false) }
+            val expanded = disclosure.leaves[disclosureKey] == true
             val running = eventType == "tool/call" && toolResult == null && sessionRunning
+            val preparing = running && message.raw.obj("data")?.get("preparing") == JsonPrimitive(true)
             val name = message.raw.obj("data")?.string("name").orEmpty()
             val title = when { eventType == "tool/call" && toolResult != null -> "工具已返回"; running -> "正在调用工具"; eventType == "tool/result" -> "工具结果"; eventType == "tool/call" -> "工具调用"; else -> "运行提示" }
             val resultMessage = (toolResult ?: message).raw.obj("data")?.obj("message")
             val failed = (resultMessage?.get("isError") as? JsonPrimitive)?.booleanOrNull == true || eventType in setOf("step/error", "turn/error")
             val color = if (failed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
             Column(Modifier.fillMaxWidth()) {
-                TextButton(onClick = { expanded = !expanded }, colors = ButtonDefaults.textButtonColors(contentColor = color),
+                HLDisclosureButton(onClick = { disclosure.leaves[disclosureKey] = !expanded }, contentColor = color,
                     contentPadding = PaddingValues(vertical = 8.dp), modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).semantics { stateDescription = if (expanded) "已展开" else "已收起" }) {
                     if (running) CircularProgressIndicator(Modifier.size(15.dp), strokeWidth = 1.5.dp, color = color) else HLNavigationIcon(if (toolResult != null && !failed) "CHECK" else "TOOL", 16.dp)
-                    Text(if (failed) "调用失败" else if (running) "正在调用" else if (name.isEmpty()) title else name,
+                    Text(if (failed) "调用失败" else if (preparing) "正在准备 ${name.ifEmpty { "工具调用" }}" else if (running) "正在调用 ${name.ifEmpty { "工具" }}" else if (name.isEmpty()) title else name,
                         Modifier.weight(1f).padding(horizontal = 8.dp), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium)
                     HLNavigationIcon(if (expanded) "UP" else "DOWN", 14.dp)
                 }
@@ -173,7 +181,12 @@ private fun HLMessageCard(message: HLMessageRecord, toolResult: HLMessageRecord?
             if (blocks.isEmpty() && message.text.isNotEmpty()) HLMarkdownText(message.text)
             blocks.forEach { block -> key(key, block.index) {
                 when (block.kind) {
-                    "reasoning" -> HLReasoningDisclosure(block.text, message.streaming && block.streaming)
+                    "reasoning" -> {
+                        val leafKey = "$disclosureKey:${block.index}"
+                        HLReasoningDisclosure(block.text, message.streaming && block.streaming, disclosure.leaves[leafKey] == true) {
+                            disclosure.leaves[leafKey] = disclosure.leaves[leafKey] != true
+                        }
+                    }
                     "text" -> if (block.text.isNotEmpty()) HLMarkdownText(block.text)
                     "tool-call" -> if (message.streaming) {
                         HLRunningState("正在准备 ${block.name ?: "工具调用"}…")
@@ -204,13 +217,12 @@ private fun HLRunningState(label: String) {
 }
 
 @Composable
-private fun HLReasoningDisclosure(raw: String, running: Boolean) {
-    var expanded by remember { mutableStateOf(false) }
+private fun HLReasoningDisclosure(raw: String, running: Boolean, expanded: Boolean, onToggle: () -> Unit) {
     val text = reasoningDisplayText(raw)
     if (text.isBlank() && !running) return
     val summary = reasoningSummary(raw, running)
     Column(Modifier.fillMaxWidth()) {
-        TextButton(onClick = { expanded = !expanded }, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant), modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).semantics { stateDescription = if (expanded) "已展开" else "已收起" }, contentPadding = PaddingValues(horizontal = 0.dp, vertical = 8.dp)) {
+        HLDisclosureButton(onClick = onToggle, modifier = Modifier.fillMaxWidth().semantics { contentDescription = "思考内容"; stateDescription = if (expanded) "已展开" else "已收起" }, contentPadding = PaddingValues(horizontal = 0.dp, vertical = 8.dp)) {
             CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurfaceVariant) { HLNavigationIcon("THINK", 16.dp) }
             Text(if (running) "思考中" else "思考", Modifier.padding(horizontal = 8.dp), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (!expanded && summary.isNotBlank()) {
