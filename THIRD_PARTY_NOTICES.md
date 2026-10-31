@@ -15,4 +15,4 @@ The iroh native dependency closure is recorded in the pinned upstream `Cargo.loc
 
 - **DeepSeek Harness**: MIT, copyright 2026 DeepSeek. Sanitized official-runtime event fixtures and adapted reasoning presentation retain the attribution in `licenses/deepseek-MIT.txt`.
 
-- **Manrope**, The Manrope Project Authors: SIL Open Font License 1.1. The Harness Link brand wordmark uses outlined Manrope glyphs; the font is not required at runtime. License and source attribution are retained in `licenses/Manrope-OFL.txt` and `design-system/brand/HLBrand.json`.
+- **Manrope**, The Manrope Project Authors: SIL Open Font License 1.1. The Harness Link brand wordmark uses outlined Manrope glyphs; the font is not required at runtime. License and source attribution are retained in `licenses/Manrope-OFL.txt`.

@@ -1,11 +1,5 @@
 # Harness Link
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="design-system/brand/masters/HLLogoHorizontalDark.svg">
-  <img src="design-system/brand/masters/HLLogoHorizontal.svg" width="360" alt="Harness Link">
-</picture>
-
-
 使用 Kotlin Multiplatform 与 Compose Multiplatform，在 Android 和 iOS 原生 App 中继续电脑上的 DeepSeek Harness 会话。
 
 配套桌面插件：[GongShichen/dsh-mobile-plugin](https://github.com/GongShichen/dsh-mobile-plugin)。这是独立社区项目，与 DeepSeek 无隶属关系。
@@ -119,7 +113,7 @@ xcrun devicectl device install app --device YOUR_DEVICE_ID \
 ./gradlew :core:transport:connectedAndroidDeviceTest
 ```
 
-第一组是协议和状态合并测试；第二组需要模拟器或设备，使用真实 Android JNI/QUIC 而非假传输。iOS Kotlin 编译与最终 Xcode 链接是不同验证步骤，结果记录在 [验证说明](docs/VALIDATION.md)。
+第一组是协议和状态合并测试；第二组需要模拟器或设备，使用真实 Android JNI/QUIC 而非假传输。iOS Kotlin 编译与最终 Xcode 链接是不同验证步骤。
 
 日常回归优先使用 Android Emulator 和 iOS Simulator，通过设备页的“或粘贴配对链接”连接真实 Mac DSH。二维码与配对链接使用同一套邀请、桌面确认、身份认证和 P2P 同步逻辑；模拟器不需要模型密钥或独立服务端。
 
@@ -129,7 +123,7 @@ iOS 基础输入和导航回归：
 DSH_IOS_SIMULATOR_ID=<已启动的模拟器UUID> scripts/HLTestIOS.sh
 ```
 
-完整审批/问答回归使用 `iosApp/Tests/HLIOSInteractionFlowTests.swift`，由插件仓库的 `scripts/HLRunIOSInteractionQA.mjs --simulator <UUID> --xctestrun <对应的模拟器测试产物>` 驱动。测试走 App 的配对链接输入、实际 Swift/iroh 和官方 DSH 接口；测试模型只产生无副作用的交互请求。隔离 Host、构建和运行步骤见插件仓库 `docs/HLInteractions.md`。
+完整审批/问答回归使用 `iosApp/Tests/HLIOSInteractionFlowTests.swift`，由插件仓库的 `scripts/HLRunIOSInteractionQA.mjs --simulator <UUID> --xctestrun <对应的模拟器测试产物>` 驱动。测试走 App 的配对链接输入、实际 Swift/iroh 和官方 DSH 接口；测试模型只产生无副作用的交互请求。详细开发记录仅在本地维护。
 
 真实相机扫码、系统推送送达、后台限制与蜂窝/复杂 NAT 网络另做真机验收。模拟器测试结果按模拟器记录，不能替代这些设备能力的验收。
 
@@ -139,7 +133,7 @@ DSH_IOS_SIMULATOR_ID=<已启动的模拟器UUID> scripts/HLTestIOS.sh
 
 输入框下方的模型与**思考强度**采用单行水平布局，分别点击各自控件选择。档位来自桌面模型目录；当前选择来自 DSH 的 `modelSelection` 投影，桌面修改后手机同步更新。没有思考档位的模型不会出现虚构选项。
 
-iOS 26 及以上使用系统原生 Liquid Glass 导航和发送按钮；低版本或开启“降低透明度”时使用系统实色控件。设计规范见 [界面规范](design-system/dsh-mobile/MASTER.md)。
+iOS 26 及以上使用系统原生 Liquid Glass 导航和发送按钮；低版本或开启“降低透明度”时使用系统实色控件。
 
 免费 Personal Team 测试可使用：
 
@@ -180,5 +174,3 @@ DSH_DEVELOPMENT_TEAM=YOURTEAMID scripts/HLBuildIOSDevice.sh --personal-team --de
 Android 日志标签为 `HarnessLink` 和 `HarnessLink-P2P`，记录扫码、连接、确认、订阅和错误码；不记录邀请密钥、令牌或聊天正文。iOS 使用相同的脱敏诊断输出。
 
 对已配置的真机运行应用 UI 测试时，先 `assembleDebugAndroidTest`，再通过 `adb install -r -t` 与 `adb shell am instrument` 直接运行测试。不要对日常使用的安装执行会自动卸载目标 App 的 Gradle connected 测试任务。扫码测试图片是固定虚构数据，只进入测试 APK。
-
-Source naming conventions: [HL naming](docs/HLNaming.md).
