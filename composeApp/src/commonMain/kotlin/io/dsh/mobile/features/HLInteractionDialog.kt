@@ -15,8 +15,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import io.dsh.mobile.design.HLKeyboardDismissalHost
+import io.dsh.mobile.design.interactionDialogProperties
 import io.dsh.mobile.design.keyboardInputArea
 import io.dsh.mobile.model.HLState
 import io.dsh.mobile.sync.HLInteractionPrompt
@@ -85,9 +85,9 @@ fun HLInteractionHost(state: HLState, repository: HLRepository, onOpenSession: (
         val plan = intent?.string("kind") == "plan-review"
         val title = when { active.kind == "approval/request" || fixed -> "权限确认"; plan -> "计划确认"; else -> "需要你的回答" }
         val session = state.sessions.firstOrNull { it.id == active.sessionId }
-        Dialog(onDismissRequest = { hide(active) }, properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnClickOutside = false)) {
+        Dialog(onDismissRequest = { hide(active) }, properties = interactionDialogProperties()) {
             HLKeyboardDismissalHost {
-                BoxWithConstraints(Modifier.fillMaxSize().imePadding().padding(horizontal = 16.dp, vertical = 24.dp), contentAlignment = Alignment.Center) {
+                BoxWithConstraints(Modifier.fillMaxSize().systemBarsPadding().imePadding().padding(horizontal = 16.dp, vertical = 24.dp), contentAlignment = Alignment.Center) {
                     Surface(Modifier.widthIn(max = 560.dp).fillMaxWidth().heightIn(max = maxHeight * .92f), shape = MaterialTheme.shapes.extraLarge, color = MaterialTheme.colorScheme.surface) {
                         Column {
                             Row(Modifier.fillMaxWidth().padding(start = 24.dp, top = 12.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {

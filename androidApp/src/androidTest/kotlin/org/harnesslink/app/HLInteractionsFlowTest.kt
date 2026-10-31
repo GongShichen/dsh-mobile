@@ -112,7 +112,11 @@ class HLInteractionsFlowTest {
                             val described = requireNotNull(answer) { "The free-text answer must be available" }
                             val field = generateSequence(described) { it.parent }.take(6).firstOrNull { it.className == "android.widget.EditText" }
                                 ?: throw AssertionError("The described answer must expose an editable field")
-                            field.click(); field.text = "HL physical device answer"; tap("需要你的回答")
+                            field.click(); field.text = "HL physical device answer"
+                            val title = waitText("需要你的回答")
+                            assertTrue("The question header must remain visible above the keyboard", title.visibleBounds.top >= 0 && title.visibleBounds.height() > 0)
+                            snapshot("questions-keyboard")
+                            title.click()
                             snapshot("questions"); tap("提交回答"); gone(); stage("questions-answered", id)
                         }
                         "skip" -> { tap("跳过此题"); tap("提交回答"); gone(); stage("question-skipped", id) }
