@@ -102,6 +102,7 @@ fun HLApp() {
                 }, colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = MaterialTheme.colorScheme.background)) },
             ) { padding ->
                 Column(Modifier.fillMaxSize().padding(padding)) {
+                    HLInteractionHost(state, repository) { id -> scope.launch { closeDrawer(); tab = HLTab.CHATS; run { repository.selectSession(id) } } }
                     if (busy) LinearProgressIndicator(Modifier.fillMaxWidth().height(2.dp))
                     when (tab) {
                         HLTab.CHATS -> HLChatScreen(state, repository, busy, run) { navigate(HLTab.DEVICES) }

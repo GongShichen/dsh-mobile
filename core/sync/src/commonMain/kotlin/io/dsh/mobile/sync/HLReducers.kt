@@ -81,6 +81,13 @@ class HLProjectionReducer {
     private val sessions = mutableMapOf<String, HLEntry>()
     fun reset() = sessions.clear()
     fun values(sessionId: String): JsonObject? = sessions[sessionId]?.let { JsonObject(it.values.toMap()) }
+    fun pendingQuestions(): List<io.dsh.mobile.model.HLPendingQuestion> = sessions.flatMap { (id, entry) ->
+        (entry.values["userQuestions"] as? JsonObject)?.array("active").orEmpty().mapNotNull { raw ->
+            val item = raw as? JsonObject ?: return@mapNotNull null
+            val callId = item.string("callId") ?: return@mapNotNull null
+            io.dsh.mobile.model.HLPendingQuestion(id, callId, item.string("state") ?: "open", item.array("questions").mapNotNull { it as? JsonObject })
+        }
+    }
     fun baseline(sessionId: String, baseline: JsonObject) {
         val seq = baseline.long("asOfSeq") ?: return
         val values = baseline.obj("values") ?: return
@@ -227,7 +234,7 @@ class HLSessionReducer(private val sessionId: String) {
 
 }
 
-data class HLSubscriptionTarget(val topic: String, val sessionId: String? = null)
+data class HLSubscriptionTarget(val topic: String, val sessionId: String? = null, val interactionId: String? = null)
 data class HLRoutedEvent(val target: HLSubscriptionTarget, val event: HLSubscriptionEvent)
 
 /** Buffers the real race where events arrive before the subscribe RPC response. */

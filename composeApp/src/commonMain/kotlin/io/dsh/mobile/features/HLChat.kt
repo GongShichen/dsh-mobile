@@ -88,15 +88,7 @@ fun HLChatScreen(state: HLState, repository: HLRepository, busy: Boolean, run: H
                     }
                 }
             }
-            items(state.interactions.filter { it.sessionId == null || it.sessionId == state.selectedSessionId }, key = { "interaction:${it.id}" }) { interaction -> HLInteractionCard(interaction, state.connected && !busy, repository, run) }
-            val forwardedCalls = state.interactions.mapNotNull { findWaitCall(it.raw) }.toSet()
-            val activeQuestions = state.projections?.obj("userQuestions")?.array("active").orEmpty().filter { (it as? JsonObject)?.string("callId") !in forwardedCalls }
-            items(activeQuestions.mapNotNull { it as? JsonObject }) { question ->
-                val callId = question.string("callId")
-                if (callId != null) HLQuestionForm(question.array("questions").mapNotNull { it as? JsonObject }, state.connected && !busy) { answer -> run {
-                    repository.call("questions.answer", buildJsonObject { put("sessionId", state.selectedSessionId ?: return@run); put("callId", callId); put("answer", answer) })
-                } }
-            }
+
         }
         Surface(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp), shape = RoundedCornerShape(24.dp), border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant), shadowElevation = 0.dp, color = MaterialTheme.colorScheme.surface) {
             Column(Modifier.fillMaxWidth().padding(8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -231,76 +223,5 @@ private fun HLReasoningDisclosure(raw: String, running: Boolean) {
         if (expanded) Box(Modifier.fillMaxWidth().padding(start = 22.dp, top = 4.dp, bottom = 12.dp)) {
             CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurfaceVariant) { HLMarkdownText(text.ifEmpty { "正在思考…" }, compact = true) }
         }
-    }
-}
-
-private fun findQuestions(value: JsonElement, depth: Int = 0): List<JsonObject> {
-    if (depth > 8) return emptyList()
-    return when (value) {
-        is JsonObject -> if (value.containsKey("questions")) value.array("questions").mapNotNull { it as? JsonObject } else value.values.flatMap { findQuestions(it, depth + 1) }
-        is JsonArray -> value.flatMap { findQuestions(it, depth + 1) }
-        else -> emptyList()
-    }
-}
-
-private fun findWaitCall(value: JsonElement, depth: Int = 0): String? {
-    if (depth > 8) return null
-    return when (value) {
-        is JsonObject -> value.obj("wait")?.string("callId") ?: value.values.firstNotNullOfOrNull { findWaitCall(it, depth + 1) }
-        is JsonArray -> value.firstNotNullOfOrNull { findWaitCall(it, depth + 1) }
-        else -> null
-    }
-}
-
-private fun approvalDetails(value: JsonElement, depth: Int = 0): JsonObject? {
-    if (depth > 8) return null
-    return when (value) {
-        is JsonObject -> value.takeIf { it.containsKey("toolName") } ?: value.values.firstNotNullOfOrNull { approvalDetails(it, depth + 1) }
-        is JsonArray -> value.firstNotNullOfOrNull { approvalDetails(it, depth + 1) }
-        else -> null
-    }
-}
-
-@Composable
-private fun HLInteractionCard(interaction: HLPendingInteraction, enabled: Boolean, repository: HLRepository, run: HLRunAction) {
-    val questions = remember(interaction.raw) { findQuestions(interaction.raw) }
-    if (questions.isNotEmpty()) HLQuestionForm(questions, enabled) { answer -> run { repository.replyInteraction(interaction.id, buildJsonObject { put("kind", "result"); put("value", answer) }) } }
-    else HLSectionCard(if (interaction.kind.contains("approval")) "有一项操作需要确认" else "等待你的响应") {
-        var expanded by remember { mutableStateOf(false) }
-        val details = remember(interaction.raw) { approvalDetails(interaction.raw) }
-        details?.string("toolName")?.let { Text("工具：$it", fontWeight = FontWeight.SemiBold) }
-        (details?.obj("displayReason")?.string("zh") ?: details?.string("reason"))?.let { HLMarkdownText(it) }
-        TextButton(onClick = { expanded = !expanded }) { Text(if (expanded) "收起请求详情" else "查看请求详情") }
-        if (expanded) HLCodeBlock(Json { prettyPrint = true }.encodeToString(JsonElement.serializer(), interaction.raw), "JSON")
-        if (interaction.kind.contains("approval")) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(enabled = enabled, onClick = { run { repository.replyInteraction(interaction.id, parameters("kind" to "result", "value" to "rejected")) } }) { Text("拒绝") }
-            Button(enabled = enabled, onClick = { run { repository.replyInteraction(interaction.id, parameters("kind" to "result", "value" to "allowed-once")) } }) { Text("允许这一次") }
-        } else Text("请在电脑端处理此类型的交互。")
-    }
-}
-
-@Composable
-private fun HLQuestionForm(questions: List<JsonObject>, enabled: Boolean, submit: (JsonObject) -> Unit) {
-    var selected by remember(questions) { mutableStateOf<Map<String, List<String>>>(emptyMap()) }
-    var custom by remember(questions) { mutableStateOf<Map<String, String>>(emptyMap()) }
-    HLSectionCard("需要你的意见") {
-        questions.forEach { question ->
-            val id = question.string("id") ?: return@forEach
-            Text(question.string("question").orEmpty(), fontWeight = FontWeight.SemiBold)
-            question.string("detail")?.let { HLMarkdownText(it) }
-            val multi = (question["multiSelect"] as? JsonPrimitive)?.booleanOrNull == true
-            question.array("options").mapNotNull { it as? JsonObject }.forEach { option ->
-                val label = option.string("label") ?: return@forEach
-                FilterChip(selected = selected[id]?.contains(label) == true, onClick = {
-                    val previous = selected[id].orEmpty()
-                    selected = selected + (id to if (!multi) listOf(label) else if (label in previous) previous - label else previous + label)
-                }, enabled = enabled, label = { Text(label) })
-                option.string("description")?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
-            }
-            if (question.obj("intent")?.string("kind") != "approval") OutlinedTextField(custom[id].orEmpty(), { custom = custom + (id to it) }, label = { Text("补充回答") }, modifier = Modifier.fillMaxWidth().keyboardInputArea(), enabled = enabled)
-        }
-        Button(enabled = enabled && questions.all { question -> val id = question.string("id"); !selected[id].isNullOrEmpty() || !custom[id].isNullOrBlank() }, onClick = {
-            submit(buildJsonObject { put("answers", buildJsonArray { questions.forEach { question -> val id = question.string("id") ?: return@forEach; add(buildJsonObject { put("id", id); put("selected", JsonArray(selected[id].orEmpty().map(::JsonPrimitive))); custom[id]?.takeIf { it.isNotBlank() }?.let { put("custom", it) } }) } }) })
-        }) { Text("提交回答") }
     }
 }

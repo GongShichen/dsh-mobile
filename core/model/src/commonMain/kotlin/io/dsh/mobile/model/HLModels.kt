@@ -56,7 +56,16 @@ data class HLMessageRecord(
 )
 
 @Serializable
-data class HLPendingInteraction(val id: String, val sessionId: String?, val kind: String, val raw: JsonObject)
+data class HLPendingInteraction(
+    val id: String, val sessionId: String?, val kind: String, val raw: JsonObject,
+    val clientId: String? = null, val timing: HLInteractionTiming? = null, val context: JsonObject? = null,
+)
+
+@Serializable
+data class HLInteractionTiming(val remainingMs: Long?, val paused: Boolean, val attached: Boolean, val expired: Boolean = false)
+
+@Serializable
+data class HLPendingQuestion(val sessionId: String, val callId: String, val state: String, val questions: List<JsonObject>)
 
 @Serializable
 enum class HLOperationStatus { QUEUED, DISPATCHED, CONFIRMED, FAILED, UNKNOWN }
@@ -86,6 +95,10 @@ data class HLState(
     val messages: List<HLMessageRecord> = emptyList(),
     val draft: String = "",
     val interactions: List<HLPendingInteraction> = emptyList(),
+    val interactionsReady: Boolean = false,
+    val pendingQuestions: List<HLPendingQuestion> = emptyList(),
+    val pendingQuestionsLoading: Boolean = false,
+    val resolvingQuestions: Set<String> = emptySet(),
     val operations: List<HLPendingOperation> = emptyList(),
     val capabilities: Set<String> = emptySet(),
     val error: String? = null,

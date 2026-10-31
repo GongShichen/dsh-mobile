@@ -10,8 +10,9 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.*
+import kotlin.time.TimeSource
 
-/** Desktop state is authoritative; the local database is a host-isolated view/cache. */
+/** Desktop state is authoritative; business views are volatile, paired-device settings are durable. */
 class HLRepository(
     private val transport: HLPeerTransport,
     private val secureStore: HLSecureStore,
@@ -39,7 +40,11 @@ class HLRepository(
     private var connectionAttempt: Job? = null
     private var pathJob: Job? = null
     private var reducer: HLSessionReducer? = null
-    private var interactionClientId: String? = null
+    private val interactionReducer = HLInteractionReducer()
+    private val interactionTime = TimeSource.Monotonic.markNow()
+    private val questionClaims = mutableMapOf<String, HLSubscriptionHandle>()
+    private var interactionTimer: Job? = null
+    private var questionRecovery: Job? = null
     private var lastPushRegistration: HLPushRegistration? = null
     private val workspaceReducer = HLWorkspaceReducer()
     private val projectionReducer = HLProjectionReducer()
@@ -260,8 +265,147 @@ class HLRepository(
     }
 
     suspend fun replyInteraction(id: String, outcome: JsonObject) {
-        val clientId = interactionClientId ?: throw HLProtocolException("交互订阅尚未就绪")
-        call("interactions.reply", buildJsonObject { put("clientId", clientId); put("eventId", id); put("outcome", outcome) })
+        lifecycle.withLock {
+            val item = events.withLock { interactionReducer.get(id) } ?: return@withLock
+            replyDelivery(item, outcome)
+        }
+    }
+
+    /** Bind a decision to its original computer, generation and request, even while changing screens. */
+    suspend fun answerInteraction(prompt: HLInteractionPrompt, answer: JsonElement) = lifecycle.withLock {
+        if (!state.value.connected || requireHost() != prompt.hostId) throw HLProtocolException("请重新连接原电脑后再处理")
+        val current = interactionPrompts(state.value).firstOrNull { it.key == prompt.key } ?: return@withLock
+        if (current.eventId != null) {
+            val item = events.withLock { interactionReducer.get(current.eventId) } ?: return@withLock
+            if (item.clientId != prompt.clientId) throw HLProtocolException("请求已刷新，请重新查看")
+            replyDelivery(item, buildJsonObject { put("kind", "result"); put("value", answer) })
+        } else {
+            if (!current.continued || current.sessionId == null || current.callId == null) throw HLProtocolException("询问正在同步，请稍后重试")
+            call("questions.answer", buildJsonObject {
+                put("sessionId", current.sessionId); put("callId", current.callId); put("answer", answer)
+            })
+            // Both an accepted reply and a no-longer-answerable request are authoritative settlements.
+            markQuestionSubmitted(current.key)
+            refreshQuestionProjection(current.sessionId)
+        }
+    }
+
+    suspend fun focusInteraction(id: String, focused: Boolean, clientId: String? = null) = events.withLock {
+        if (clientId == null || interactionReducer.get(id)?.clientId == clientId) interactionReducer.focus(id, focused, interactionNow())
+        publishInteractions()
+    }
+    suspend fun engageInteraction(id: String) = events.withLock {
+        interactionReducer.engage(id, interactionNow()); publishInteractions()
+    }
+    suspend fun holdInteraction(id: String) = events.withLock {
+        interactionReducer.takeTime(id, interactionNow()); publishInteractions()
+    }
+
+    private fun interactionNow() = interactionTime.elapsedNow().inWholeMilliseconds
+    private fun publishInteractions() {
+        mutableState.update { it.copy(interactions = interactionReducer.snapshot(interactionNow()), interactionsReady = interactionReducer.clientId != null) }
+    }
+    private fun publishQuestionProjections() {
+        mutableState.update { it.copy(pendingQuestions = projectionReducer.pendingQuestions()) }
+    }
+    private fun markQuestionSubmitted(key: String) {
+        mutableState.update { it.copy(resolvingQuestions = (it.resolvingQuestions + key).toList().takeLast(256).toSet()) }
+    }
+    private suspend fun replyDelivery(item: HLPendingInteraction, outcome: JsonObject) {
+        val currentEpoch = epoch
+        val client = item.clientId ?: throw HLProtocolException("交互订阅尚未就绪")
+        val result = call("interactions.reply", buildJsonObject { put("clientId", client); put("eventId", item.id); put("outcome", outcome) })
+        if (currentEpoch != epoch) return
+        val callId = item.raw.obj("request")?.obj("wait")?.string("callId")
+        val sessionId = item.sessionId
+        if (outcome.string("kind") == "result" && result.jsonObject.boolean("accepted") == true && sessionId != null && callId != null) {
+            markQuestionSubmitted(questionKey(sessionId, callId))
+        }
+        events.withLock { interactionReducer.remove(item.id); publishInteractions() }
+        releaseQuestionClaim(item.id)
+    }
+
+    private suspend fun refreshQuestionProjection(sessionId: String) {
+        val currentEpoch = epoch
+        val snapshot = requireRpc().call("sessions.projections", buildJsonObject { put("sessionId", sessionId) }) as? JsonObject ?: return
+        events.withLock {
+            if (currentEpoch != epoch) return@withLock
+            projectionReducer.baseline(sessionId, snapshot); publishQuestionProjections()
+        }
+    }
+
+    private fun attachQuestionClaim(item: HLPendingInteraction) {
+        if ("interaction-waits" !in state.value.capabilities || item.raw.obj("request")?.obj("wait")?.boolean("timed") != true) return
+        val currentEpoch = epoch
+        val currentRpc = rpc ?: return
+        scope.launch {
+            var handle: HLSubscriptionHandle? = null
+            try {
+                handle = WireJson.decodeFromJsonElement(HLSubscriptionHandle.serializer(), currentRpc.call("subscribe", buildJsonObject {
+                    put("topic", "questionWait"); put("request", buildJsonObject { put("clientId", item.clientId); put("eventId", item.id) })
+                }))
+                val keep = events.withLock {
+                    if (currentEpoch != epoch || interactionReducer.get(item.id)?.clientId != item.clientId) false
+                    else {
+                        questionClaims[item.id] = handle
+                        router.register(handle, HLSubscriptionTarget("questionWait", interactionId = item.id)).forEach { applyEvent(it) }
+                        true
+                    }
+                }
+                if (!keep) currentRpc.call("unsubscribe", buildJsonObject { put("subscriptionId", handle.subscriptionId) })
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (error: Throwable) {
+                if (currentEpoch == epoch && events.withLock { interactionReducer.get(item.id) != null }) {
+                    reportFailure("interaction.wait.failed", error)
+                    // Claim failure must not leave a live timed request unprotected indefinitely.
+                    handle?.let { runCatching { currentRpc.call("unsubscribe", buildJsonObject { put("subscriptionId", it.subscriptionId) }) } }
+                    scope.launch { if (currentEpoch == epoch) connectionLost(error) }
+                }
+            }
+        }
+    }
+
+    private suspend fun releaseQuestionClaim(id: String) {
+        val currentRpc = rpc ?: return
+        val handle = events.withLock { questionClaims.remove(id)?.also { router.remove(it.subscriptionId) } } ?: return
+        runCatching { currentRpc.call("unsubscribe", buildJsonObject { put("subscriptionId", handle.subscriptionId) }) }
+    }
+
+    private fun ensureInteractionTimer() {
+        if (interactionTimer?.isActive == true || !interactionReducer.hasClocks()) return
+        val currentEpoch = epoch
+        interactionTimer = scope.launch {
+            while (isActive && currentEpoch == epoch) {
+                delay(500)
+                val expired = events.withLock { interactionReducer.expired(interactionNow()).also { publishInteractions() } }
+                for (item in expired) scope.launch {
+                    // Release the Host claim before reporting the official timeout outcome.
+                    releaseQuestionClaim(item.id)
+                    if (currentEpoch == epoch) runCatching { replyInteraction(item.id, buildJsonObject {
+                        put("kind", "rejected"); put("error", buildJsonObject {
+                            put("name", "UserQuestionError"); put("code", "ASK_TIMED_OUT"); put("message", "Question timed out")
+                        })
+                    }) }
+                }
+                if (!events.withLock { interactionReducer.hasClocks() }) break
+            }
+        }
+    }
+
+    private fun loadInteractionContext(item: HLPendingInteraction) {
+        if (item.kind != "approval/request" || item.sessionId == null) return
+        val callId = item.raw.obj("request")?.string("callId") ?: return
+        val currentEpoch = epoch
+        val currentRpc = rpc ?: return
+        scope.launch {
+            runCatching {
+                val page = currentRpc.call("sessions.events", buildJsonObject {
+                    put("address", buildJsonObject { put("kind", "session"); put("sessionId", item.sessionId) }); put("maxMessages", 64)
+                }).jsonObject
+                val context = interactionToolContext(page.array("records").mapNotNull { it as? JsonObject }, callId) ?: return@runCatching
+                events.withLock { if (currentEpoch == epoch) { interactionReducer.context(item.id, context); publishInteractions() } }
+            }.onFailure { if (it !is CancellationException) reportFailure("interaction.context.unavailable", it) }
+        }
     }
 
     /** Uses only the documented mobile allowlist, never arbitrary upstream endpoints. */
@@ -475,7 +619,28 @@ class HLRepository(
         subscribe("sessionControl", JsonObject(emptyMap()))
         runCatching { refreshModels() }.onFailure(::showError)
         if (currentEpoch == epoch) mutableState.update { it.copy(connection = HLConnectionStatus.CONNECTED) }
+        recoverPendingQuestions(currentEpoch)
         scope.launch { runCatching { configurePush() }.onFailure(::showError) }
+    }
+
+    /** Header hints are not authoritative. Recover pending calls from non-activating, sequenced reads. */
+    private fun recoverPendingQuestions(currentEpoch: Long) {
+        questionRecovery?.cancel()
+        val rows = state.value.sessions.toList()
+        questionRecovery = scope.launch {
+            if (currentEpoch != epoch) return@launch
+            mutableState.update { it.copy(pendingQuestionsLoading = true) }
+            try {
+                for (row in rows) {
+                    if (currentEpoch != epoch) break
+                    if (row.raw.string("formatStatus") == "migration-required") continue
+                    try { refreshQuestionProjection(row.id) }
+                    catch (cancelled: CancellationException) { throw cancelled }
+                    catch (error: Throwable) { reportFailure("interaction.recovery.unavailable", error) }
+                    delay(25) // Let decisions and foreground actions use the control stream between reads.
+                }
+            } finally { if (currentEpoch == epoch) mutableState.update { it.copy(pendingQuestionsLoading = false) } }
+        }
     }
 
     private suspend fun openPeer(descriptor: HLPeerDescriptor): HLPeerConnection {
@@ -514,6 +679,20 @@ class HLRepository(
         val payload = routed.event.event
         if (payload.string("type") in setOf("error", "end")) {
             router.remove(routed.event.subscriptionId)
+            if (routed.target.topic == "questionWait") {
+                if (payload.string("type") == "error") {
+                    val currentEpoch = epoch
+                    val error = HLProtocolException("询问等待状态同步失败，正在重新连接")
+                    scope.launch { if (currentEpoch == epoch) connectionLost(error) }
+                }
+                return
+            }
+            if (routed.target.topic == "interactions") {
+                val currentEpoch = epoch
+                interactionReducer.reset(); publishInteractions()
+                scope.launch { if (currentEpoch == epoch) connectionLost(HLProtocolException("交互连接已结束，正在重新同步")) }
+                return
+            }
             val message = payload.obj("error")?.string("message") ?: "状态订阅已结束，请重新连接"
             mutableState.update { it.copy(error = "${routed.target.topic}: $message") }
             return
@@ -523,6 +702,7 @@ class HLRepository(
                 val id = routed.target.sessionId ?: return
                 if (state.value.selectedSessionId != id) return
                 payload.obj("projections")?.let { projectionReducer.baseline(id, it) }
+                publishQuestionProjections()
                 applyPresentation(payload)
                 reducer?.apply(payload); publishMessages(hostId, id)
             }
@@ -542,14 +722,20 @@ class HLRepository(
                     cache.replaceSessions(hostId, rows); mutableState.update { it.copy(sessions = rows) }
                 } else scope.launch { runCatching { refreshSessions() }.onFailure(::showError) }
             }
-            "interactions" -> when (payload.string("type")) {
-                "ready" -> interactionClientId = payload.string("clientId")
-                "waterfall" -> {
-                    val id = payload.string("eventId") ?: return
-                    val item = HLPendingInteraction(id, payload.string("agentId"), payload.string("event") ?: "question", payload)
-                    mutableState.update { it.copy(interactions = it.interactions.filterNot { existing -> existing.id == id } + item) }
+            "interactions" -> {
+                interactionReducer.accept(payload); publishInteractions()
+                when (payload.string("type")) {
+                    "waterfall" -> interactionReducer.get(payload.string("eventId").orEmpty())?.let { attachQuestionClaim(it); loadInteractionContext(it); ensureInteractionTimer() }
+                    "cancel" -> payload.string("eventId")?.let { id -> scope.launch { releaseQuestionClaim(id) } }
                 }
-                "cancel" -> mutableState.update { it.copy(interactions = it.interactions.filterNot { item -> item.id == payload.string("eventId") }) }
+                reportDiagnostic("interaction.updated", "kind=${payload.string("type")} count=${state.value.interactions.size}")
+            }
+            "questionWait" -> {
+                val id = routed.target.interactionId ?: return
+                if (payload.string("type") == "waiting") {
+                    payload.long("remainingMs")?.let { interactionReducer.waiting(id, it, interactionNow()) }
+                    publishInteractions()
+                }
             }
             "workspaces" -> {
                 workspaceReducer.apply(payload)
@@ -562,6 +748,7 @@ class HLRepository(
             }
             "sessionControl" -> {
                 projectionReducer.control(payload)
+                publishQuestionProjections()
                 val rows = state.value.sessions.map { row -> projectionReducer.values(row.id)?.string("title")?.let { row.copy(title = it.ifBlank { "新会话" }) } ?: row }
                 cache.replaceSessions(hostId, rows)
                 mutableState.update { current ->
@@ -640,9 +827,12 @@ class HLRepository(
     private suspend fun closeCurrent() {
         epoch++
         pathJob?.cancel(); pathJob = null
+        interactionTimer?.cancel(); interactionTimer = null
+        questionRecovery?.cancel(); questionRecovery = null
         val previous = rpc; rpc = null
         previous?.close()
-        events.withLock { router.reset(); reducer = null; interactionClientId = null; workspaceReducer.reset(); projectionReducer.reset() }
+        events.withLock { router.reset(); reducer = null; interactionReducer.reset(); questionClaims.clear(); workspaceReducer.reset(); projectionReducer.reset() }
+        mutableState.update { it.copy(interactions = emptyList(), interactionsReady = false, pendingQuestions = emptyList(), pendingQuestionsLoading = false, resolvingQuestions = emptySet()) }
     }
     private fun requireRpc(): HLRPCSession = rpc ?: throw HLProtocolException("请先连接桌面端")
     private suspend fun awaitConnected() {
