@@ -28,7 +28,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import io.dsh.mobile.sync.canonicalAssistantBlocks
 import io.dsh.mobile.sync.reasoningDisplayText
 import io.dsh.mobile.sync.reasoningSummary
-import io.dsh.mobile.design.HLIconTile
+import io.dsh.mobile.design.HLBrandMark
 import io.dsh.mobile.design.HLPlatformActionButton
 import androidx.compose.ui.unit.dp
 import io.dsh.mobile.design.keyboardInputArea
@@ -73,7 +73,7 @@ fun HLChatScreen(state: HLState, repository: HLRepository, busy: Boolean, run: H
     Column(Modifier.fillMaxSize().imePadding()) {
         LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = list, contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(0.dp)) {
             if (state.hasMoreHistory) item { TextButton(enabled = !busy, onClick = { run { repository.loadHistory() } }, modifier = Modifier.fillMaxWidth()) { Text("加载更早的消息") } }
-            if (messages.isEmpty()) item { Column(Modifier.fillMaxWidth().padding(top = 72.dp, bottom = 32.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) { HLIconTile("CHATS"); Text(if (state.hosts.isEmpty()) "有什么可以帮你？" else "继续你的想法", style = MaterialTheme.typography.titleLarge); Text(if (state.hosts.isEmpty()) "连接电脑，继续对话与任务。" else "从一个问题开始，或让电脑继续完成任务。", style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.widthIn(max = 280.dp)); if (state.hosts.isEmpty()) TextButton(onClick = onConnect) { Text("添加电脑") } } }
+            if (messages.isEmpty()) item { Column(Modifier.fillMaxWidth().padding(top = 72.dp, bottom = 32.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) { HLBrandMark(Modifier.size(72.dp)); Text(if (state.hosts.isEmpty()) "有什么可以帮你？" else "继续你的想法", style = MaterialTheme.typography.titleLarge); Text(if (state.hosts.isEmpty()) "连接电脑，继续对话与任务。" else "从一个问题开始，或让电脑继续完成任务。", style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.widthIn(max = 280.dp)); if (state.hosts.isEmpty()) TextButton(onClick = onConnect) { Text("添加电脑") } } }
             itemsIndexed(messages, key = { _, message -> message.presentationId ?: message.id }) { index, message ->
                 val previous = messages.getOrNull(index - 1)
                 val presentation = message.raw.obj("data")?.number("turn")?.let { state.turnPresentation[it] }

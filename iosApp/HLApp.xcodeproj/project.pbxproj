@@ -13,6 +13,7 @@
 		5D7088F49140BE47EFD5D8AE /* HLAppUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 511AC8447027AB819DDB4574 /* HLAppUITests.swift */; };
 		62BA7DCCD3DA83A129627DBE /* HLApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD5658A0C6ADDFABE5A98B03 /* HLApp.swift */; };
 		72CD63C54B5388445ADF7727 /* HLIOSGlassButtons.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23A6A7400A72A2E068FD58E1 /* HLIOSGlassButtons.swift */; };
+		7547A0171087B17418AFED4D /* HLAssets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 1103561A419E046D5C858B4C /* HLAssets.xcassets */; };
 		839BA4F97113800C212E9F92 /* IrohLib in Frameworks */ = {isa = PBXBuildFile; productRef = 022F7C5EB90AC5DB70E76A77 /* IrohLib */; };
 		863CFB02B5E81C81AE40ACB5 /* HLKotlinBuildStamp.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9A27E54CEBBA26DDA10612B /* HLKotlinBuildStamp.swift */; };
 		E0AB2A07DBFD6C2DEC770A03 /* HLIOSPlatformServices.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F9B5CE25F1E8166951F5D0E /* HLIOSPlatformServices.swift */; };
@@ -32,6 +33,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		1103561A419E046D5C858B4C /* HLAssets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = HLAssets.xcassets; sourceTree = "<group>"; };
 		23A6A7400A72A2E068FD58E1 /* HLIOSGlassButtons.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HLIOSGlassButtons.swift; sourceTree = "<group>"; };
 		3D7B952ADAF943160DB7AA9D /* HLIrohBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HLIrohBridge.swift; sourceTree = "<group>"; };
 		4F9B5CE25F1E8166951F5D0E /* HLIOSPlatformServices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HLIOSPlatformServices.swift; sourceTree = "<group>"; };
@@ -88,6 +90,7 @@
 		9719DA4E97ADE057F1DDE027 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
+				1103561A419E046D5C858B4C /* HLAssets.xcassets */,
 				B12C343AA4B5EA2F9211E935 /* Licenses */,
 			);
 			path = Resources;
@@ -226,6 +229,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				7547A0171087B17418AFED4D /* HLAssets.xcassets in Resources */,
 				070EA3DEE33F8421FB2DDBAB /* iroh-Apache-2.0.txt in Resources */,
 				F67E5D55696AC35D7AC4ADCD /* iroh-MIT.txt in Resources */,
 			);
@@ -373,7 +377,7 @@
 		5245A075BA656D370455B134 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = HLAppIcon;
 				CODE_SIGN_ENTITLEMENTS = HLApp.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 1;
@@ -403,7 +407,7 @@
 		57EE69E45BD99EE6A0E54FA2 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = HLAppIcon;
 				CODE_SIGN_ENTITLEMENTS = HLApp.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 1;

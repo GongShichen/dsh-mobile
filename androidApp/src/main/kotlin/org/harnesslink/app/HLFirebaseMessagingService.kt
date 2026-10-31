@@ -47,7 +47,8 @@ class HLFirebaseMessagingService : FirebaseMessagingService() {
         val pending = PendingIntent.getActivity(this, notificationId, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val title = if (data["kind"] == "approval") "DSH 需要你确认" else "DSH 任务有更新"
         val notification = NotificationCompat.Builder(this, CHANNEL)
-            .setSmallIcon(android.R.drawable.stat_notify_chat)
+            .setSmallIcon(R.drawable.hl_notification)
+            .setColor(getColor(R.color.hl_brand_blue))
             .setContentTitle(title)
             .setContentText("点击连接电脑并查看会话")
             .setContentIntent(pending)

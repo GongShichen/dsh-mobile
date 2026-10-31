@@ -1,5 +1,11 @@
 # Harness Link
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="design-system/brand/masters/HLLogoHorizontalDark.svg">
+  <img src="design-system/brand/masters/HLLogoHorizontal.svg" width="360" alt="Harness Link">
+</picture>
+
+
 使用 Kotlin Multiplatform 与 Compose Multiplatform，在 Android 和 iOS 原生 App 中继续电脑上的 DeepSeek Harness 会话。
 
 配套桌面插件：[GongShichen/dsh-mobile-plugin](https://github.com/GongShichen/dsh-mobile-plugin)。这是独立社区项目，与 DeepSeek 无隶属关系。

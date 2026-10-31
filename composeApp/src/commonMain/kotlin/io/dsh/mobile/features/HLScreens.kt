@@ -19,6 +19,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import io.dsh.mobile.design.HLIconTile
+import io.dsh.mobile.design.HLBrandMark
 import io.dsh.mobile.design.HLStatusPill
 import androidx.compose.ui.unit.dp
 import io.dsh.mobile.design.keyboardInputArea
@@ -39,7 +40,7 @@ internal fun parameters(vararg pairs: Pair<String, String>): JsonObject = buildJ
 fun HLEmptyPanel(title: String, description: String, action: (@Composable () -> Unit)? = null) {
     Box(Modifier.fillMaxSize().padding(28.dp), contentAlignment = Alignment.Center) {
         Column(Modifier.widthIn(max = 380.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            HLIconTile("CHATS", Modifier.padding(bottom = 8.dp))
+            HLBrandMark(Modifier.size(64.dp).padding(bottom = 8.dp))
             Text(title, style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center)
             Text(description, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
             action?.invoke()
