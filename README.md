@@ -4,7 +4,7 @@
 
 [![Android and iOS](https://img.shields.io/badge/Android%20%2B%20iOS-Kotlin%20Multiplatform-595959.svg)](#从源码构建) [![License: MIT](https://img.shields.io/badge/License-MIT-595959.svg)](LICENSE)
 
-**[桌面插件](https://github.com/GongShichen/dsh-mobile-plugin) · [开始使用](#开始使用) · [从源码构建](#从源码构建)**
+**[下载安装包](https://github.com/GongShichen/dsh-mobile/releases/tag/v0.1.3) · [桌面插件](https://github.com/GongShichen/dsh-mobile-plugin) · [开始使用](#开始使用) · [从源码构建](#从源码构建)**
 
 <img src="assets/HLBanner.webp" alt="Harness Link — Your desktop agent. On your phone." width="100%">
 
@@ -15,7 +15,7 @@ Agent 在电脑上执行，手机也能接着聊、处理审批、查看文件�
 你需要一台运行 **DeepSeek Harness `0.2.2-alpha.2`** 的 Apple Silicon Mac，以及 Android 8.0+ 或 iOS 17.5+ 手机。
 
 1. **电脑安装插件。** 按照 [Harness Link Plugin 的安装说明](https://github.com/GongShichen/dsh-mobile-plugin#安装)配置实际使用的 DSH profile。
-2. **安装手机 App。** Android 可[从源码构建](#android)，或在[成功的 CI 构建](https://github.com/GongShichen/dsh-mobile/actions/workflows/build.yml)中下载 `harness-link-android-debug` 产物；iOS 使用自己的开发者团队[签名安装](#ios)。
+2. **安装手机 App。** 从 [v0.1.3 Preview](https://github.com/GongShichen/dsh-mobile/releases/tag/v0.1.3) 下载 Android arm64 APK、iOS 未签名 IPA 或 arm64 模拟器包。APK 使用调试签名；IPA 安装到真机前需要自己的签名，预编译 iOS 包关闭 APNs。也可[从源码构建](#从源码构建)。
 3. **扫码并确认。** 打开电脑上的“移动访问”，在手机扫描二维码，或粘贴配对链接，然后在电脑确认设备授权。
 4. **继续会话。** 选择电脑与会话；双方保留设备身份，之后无需重复扫码。
 
