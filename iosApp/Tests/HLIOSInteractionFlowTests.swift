@@ -125,9 +125,10 @@ final class HLIOSInteractionFlowTests: XCTestCase {
             for mode in config.modes {
                 if ["permission", "questions"].contains(mode) && element("菜单").exists { try tap("菜单"); try tap("设置") }
                 stage("request:\(mode)")
-                if !["questions", "skip", "timed", "conversation", "changes"].contains(mode) { _ = try wait("来自：HL QA · \(mode)") }
+                if !["questions", "skip", "timed", "conversation", "changes", "composer"].contains(mode) { _ = try wait("来自：HL QA · \(mode)") }
                 Thread.sleep(forTimeInterval: 0.35) // Let the previous modal finish dismissing before tapping the new request.
                 switch mode {
+                case "composer": try verifyComposerDetails()
                 case "changes": try verifyFileChanges()
                 case "conversation": try verifyConversationDisclosure()
                 case "approval":
@@ -181,6 +182,77 @@ final class HLIOSInteractionFlowTests: XCTestCase {
             }
             stage("complete")
         } catch { capture("failure"); throw error }
+    }
+
+    private func verifyComposerDetails() throws {
+        func detail(_ text: String) throws {
+            let item = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", text)).firstMatch
+            guard item.waitForExistence(timeout: 10) else { throw HLFailure.missingControl(text) }
+        }
+        try tap("菜单")
+        let search = app.textViews.matching(NSPredicate(format: "label CONTAINS %@", "搜索对话")).firstMatch
+        guard search.waitForExistence(timeout: 10) else { throw HLFailure.missingControl("搜索对话") }
+        let name = configuration!.conversationTitle!
+        search.tap(); search.typeText(name); try tap(name)
+        _ = try wait("会话统计验证已完成。")
+        func reading(_ prefix: String) -> XCUIElement { app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", prefix)).firstMatch }
+        func choose(_ label: String) throws {
+            let item = reading(label)
+            guard item.waitForExistence(timeout: 10), item.isHittable else { throw HLFailure.missingControl(label) }
+            item.tap()
+        }
+        let activity = reading("会话统计，")
+        guard activity.waitForExistence(timeout: 10) else { throw HLFailure.missingControl("会话统计摘要") }
+        let inputBefore = app.textViews.matching(NSPredicate(format: "label CONTAINS %@", "消息输入")).firstMatch.frame
+        let orientationBefore = XCUIDevice.shared.orientation
+        capture("composer-dock")
+        activity.tap(); _ = try wait("会话统计"); try detail("模型用时"); try detail("工具调用用时"); try detail("首 token 平均（TTFT）"); try detail("输出速度（TPS）")
+        XCTAssertEqual(XCUIDevice.shared.orientation, orientationBefore)
+        capture("composer-statistics"); try tap("关闭会话统计")
+        let inputAfter = app.textViews.matching(NSPredicate(format: "label CONTAINS %@", "消息输入")).firstMatch.frame
+        XCTAssertEqual(inputBefore.minY, inputAfter.minY, accuracy: 1)
+        XCTAssertEqual(inputBefore.maxY, inputAfter.maxY, accuracy: 1)
+        let usage = reading("Token 用量，")
+        guard usage.waitForExistence(timeout: 5) else { throw HLFailure.missingControl("Token 用量摘要") }
+        usage.tap(); _ = try wait("Token 用量"); _ = try wait("65,810 tok"); try detail("77%"); try detail("10,025 tok"); try detail("50,075 tok"); try detail("5,200 tok"); try detail("510 tok")
+        capture("composer-usage")
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.1)).tap()
+        XCTAssertFalse(element("Token 用量").exists)
+        let context = reading("上下文已用 ")
+        guard context.waitForExistence(timeout: 5) else { throw HLFailure.missingControl("上下文摘要") }
+        context.tap(); try detail("系统提示词"); try detail("工具定义"); try detail("对话消息"); capture("composer-context")
+        let closeContext = reading("关闭上下文已用 ")
+        guard closeContext.waitForExistence(timeout: 5) else { throw HLFailure.missingControl("关闭上下文") }
+        closeContext.tap()
+        let permission = reading("访问模式，当前：")
+        guard permission.waitForExistence(timeout: 5) else { throw HLFailure.missingControl("权限模式") }
+        let workspaceBefore = permission.label.contains("工作区内修改")
+        permission.tap(); _ = try wait("当前会话权限")
+        if !workspaceBefore { try choose("选择工作区内修改") } else { try tap("关闭当前会话权限") }
+        _ = try wait("访问模式，当前：工作区内修改")
+        stage("composer-desktop-permission")
+        _ = try wait("访问模式，当前：仅可查看", timeout: 15)
+        try tap("访问模式，当前：仅可查看"); try choose("选择完全权限")
+        _ = try wait("确认启用完全权限？")
+        let confirm = element("启用完全权限")
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5)); XCTAssertFalse(confirm.isEnabled)
+        capture("composer-risk"); try tap("取消")
+        _ = try wait("访问模式，当前：仅可查看")
+        try tap("访问模式，当前：仅可查看"); try choose("选择完全权限"); try tap("我已了解风险，并愿意继续"); try tap("启用完全权限")
+        _ = try wait("访问模式，当前：完全权限")
+        try tap("访问模式，当前：完全权限"); try choose("选择仅可查看")
+        _ = try wait("访问模式，当前：仅可查看")
+        let input = app.textViews.matching(NSPredicate(format: "label CONTAINS %@", "消息输入")).firstMatch
+        guard input.waitForExistence(timeout: 5) else { throw HLFailure.missingControl("消息输入") }
+        input.tap(); input.typeText("HL composer keyboard")
+        Thread.sleep(forTimeInterval: 0.5)
+        XCTAssertTrue(reading("Token 用量，").exists)
+        let keyboardContext = reading("上下文已用 ")
+        guard keyboardContext.waitForExistence(timeout: 5) else { throw HLFailure.missingControl("键盘上方上下文控件") }
+        keyboardContext.tap(); try detail("系统提示词")
+        reading("关闭上下文已用 ").tap()
+        guard reading("Token 用量，").waitForExistence(timeout: 5) else { throw HLFailure.missingControl("键盘关闭后 Token 摘要") }
+        stage("composer-verified")
     }
 
     private func verifyFileChanges() throws {

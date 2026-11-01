@@ -99,7 +99,7 @@ fun HLChatScreen(state: HLState, repository: HLRepository, busy: Boolean, run: H
             }
 
         }
-        Surface(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp), shape = RoundedCornerShape(24.dp), border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant), shadowElevation = 0.dp, color = MaterialTheme.colorScheme.surface) {
+        Surface(modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 4.dp), shape = RoundedCornerShape(24.dp), border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant), shadowElevation = 0.dp, color = MaterialTheme.colorScheme.surface) {
             Column(Modifier.fillMaxWidth().padding(8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 attachments.forEach { (name, receipt) -> Row(verticalAlignment = Alignment.CenterVertically) { Text(name, modifier = Modifier.weight(1f), maxLines = 1); TextButton(onClick = { attachments = attachments.filterNot { it.second == receipt } }) { Text("移除") } } }
                 TextField(draft, { text -> draft = text; scope.launch { repository.setDraft(text) } }, modifier = Modifier.fillMaxWidth().keyboardInputArea("composer").semantics { contentDescription = "消息输入" }, placeholder = { Text(if (state.connected) "给 DeepSeek 发消息…" else "连接恢复后可发送") }, maxLines = 6, colors = TextFieldDefaults.colors(focusedContainerColor = MaterialTheme.colorScheme.surface, unfocusedContainerColor = MaterialTheme.colorScheme.surface, focusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent, unfocusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent), shape = MaterialTheme.shapes.large)
@@ -134,6 +134,7 @@ fun HLChatScreen(state: HLState, repository: HLRepository, busy: Boolean, run: H
                 }
             }
         }
+        HLComposerDock(state, repository, busy, run)
     }
 }
 

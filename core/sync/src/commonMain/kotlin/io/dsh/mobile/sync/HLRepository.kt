@@ -30,6 +30,7 @@ class HLRepository(
     private val selection = Mutex()
     private val resuming = Mutex()
     private val pushConfiguration = Mutex()
+    private val permissionRefresh = Mutex()
     private val initialized = CompletableDeferred<Unit>()
     private var foreground = false
     private var resumeAllowed = true
@@ -243,6 +244,26 @@ class HLRepository(
     }
 
     suspend fun cancelRun() { call("sessions.cancel", buildJsonObject { put("sessionId", requireSelectedSession()) }) }
+
+    suspend fun refreshPermissionCatalog() = permissionRefresh.withLock {
+        val generation = epoch
+        val currentRpc = requireRpc()
+        mutableState.update { it.copy(permissionCatalog = null, permissionCatalogError = null) }
+        val previous = events.withLock { router.handles().filter { it.second.topic == "permissions" }.also { rows -> rows.forEach { router.remove(it.first.subscriptionId) } } }
+        previous.forEach { (handle, _) -> runCatching { currentRpc.call("unsubscribe", buildJsonObject { put("subscriptionId", handle.subscriptionId) }) } }
+        if (generation != epoch || rpc !== currentRpc) throw CancellationException("Permission catalog connection changed")
+        subscribe("permissions", JsonObject(emptyMap()))
+    }
+
+    /** The original session/connection owns this choice; actual selection comes back through DSH projections. */
+    suspend fun selectPermission(hostId: String, sessionId: String, generation: Long, preset: String, acknowledged: Boolean) = lifecycle.withLock { selection.withLock {
+        fun current() = state.value.connected && state.value.activeHostId == hostId && state.value.selectedSessionId == sessionId && epoch == generation
+        if (!current()) throw CancellationException("Permission selection is no longer current")
+        if (state.value.permissionCatalog?.options?.none { it.value == preset } != false) throw HLProtocolException("此权限选项已不可用，请刷新")
+        val result = call("permissions.select", buildJsonObject { put("sessionId", sessionId); put("preset", preset); put("acknowledged", acknowledged) }).jsonObject
+        if (result.boolean("accepted") != true) throw HLProtocolException("桌面没有接受这次权限切换")
+        if (current()) refreshQuestionProjection(sessionId)
+    } }
     suspend fun renameSession(id: String, title: String) {
         call("sessions.rename", buildJsonObject { put("sessionId", id); put("title", title) }); refreshSessions()
     }
@@ -333,6 +354,7 @@ class HLRepository(
         events.withLock {
             if (currentEpoch != epoch) return@withLock
             projectionReducer.baseline(sessionId, snapshot); publishQuestionProjections()
+            if (state.value.selectedSessionId == sessionId) mutableState.update { it.copy(projections = projectionReducer.values(sessionId)) }
         }
     }
 
@@ -650,6 +672,7 @@ class HLRepository(
         subscribe("interactions", JsonObject(emptyMap()))
         subscribe("workspaces", JsonObject(emptyMap()))
         subscribe("sessionControl", JsonObject(emptyMap()))
+        if ("permissions" in host.capabilities) subscribe("permissions", JsonObject(emptyMap()))
         runCatching { refreshModels() }.onFailure(::showError)
         if (currentEpoch == epoch) mutableState.update { it.copy(connection = HLConnectionStatus.CONNECTED) }
         recoverPendingQuestions(currentEpoch)
@@ -727,10 +750,22 @@ class HLRepository(
                 return
             }
             val message = payload.obj("error")?.string("message") ?: "状态订阅已结束，请重新连接"
+            if (routed.target.topic == "permissions") {
+                mutableState.update { it.copy(permissionCatalog = null, permissionCatalogError = message) }; return
+            }
             mutableState.update { it.copy(error = "${routed.target.topic}: $message") }
             return
         }
         when (routed.target.topic) {
+            "permissions" -> if (payload.string("type") == "baseline") {
+                try {
+                    val catalog = WireJson.decodeFromJsonElement(HLPermissionCatalog.serializer(), payload.getValue("value"))
+                    mutableState.update { it.copy(permissionCatalog = catalog, permissionCatalogError = null) }
+                } catch (error: Throwable) {
+                    if (error is CancellationException) throw error
+                    mutableState.update { it.copy(permissionCatalog = null, permissionCatalogError = "无法读取桌面权限选项") }
+                }
+            }
             "session" -> {
                 val id = routed.target.sessionId ?: return
                 if (state.value.selectedSessionId != id) return
@@ -865,7 +900,7 @@ class HLRepository(
         val previous = rpc; rpc = null
         previous?.close()
         events.withLock { router.reset(); reducer = null; interactionReducer.reset(); questionClaims.clear(); workspaceReducer.reset(); projectionReducer.reset() }
-        mutableState.update { it.copy(interactions = emptyList(), interactionsReady = false, pendingQuestions = emptyList(), pendingQuestionsLoading = false, resolvingQuestions = emptySet(), connectionGeneration = epoch) }
+        mutableState.update { it.copy(interactions = emptyList(), interactionsReady = false, pendingQuestions = emptyList(), pendingQuestionsLoading = false, resolvingQuestions = emptySet(), connectionGeneration = epoch, permissionCatalog = null, permissionCatalogError = null) }
     }
     private fun requireRpc(): HLRPCSession = rpc ?: throw HLProtocolException("请先连接桌面端")
     private suspend fun awaitConnected() {

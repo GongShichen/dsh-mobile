@@ -19,6 +19,9 @@ import io.dsh.mobile.model.HLState
 import io.dsh.mobile.platform.formatMessageTime
 import io.dsh.mobile.sync.HLRepository
 import io.dsh.mobile.design.HLDisclosureButton
+import io.dsh.mobile.design.HLFloatingPanel
+import io.dsh.mobile.sync.cacheHitPercent
+import io.dsh.mobile.sync.exactTokens
 import kotlinx.serialization.json.*
 import kotlin.math.roundToLong
 
@@ -61,7 +64,7 @@ internal fun HLTurnStatus(presentation: JsonObject, turn: Long? = null, expanded
 internal fun HLTurnActions(presentation: JsonObject, state: HLState, repository: HLRepository, busy: Boolean, run: HLRunAction) {
     val clipboard = LocalClipboardManager.current
     var copied by remember(presentation.number("endSeq")) { mutableStateOf(false) }
-    var usageOpen by remember { mutableStateOf(false) }
+    var usageOpen by remember(state.activeHostId, state.selectedSessionId, state.connectionGeneration, presentation.number("endSeq")) { mutableStateOf(false) }
     val text = presentation.string("text").orEmpty()
     val messageId = presentation.string("messageId")
     val rating = messageId?.let { state.feedback[it] }
@@ -99,12 +102,14 @@ internal fun HLTurnActions(presentation: JsonObject, state: HLState, repository:
         }
         presentation.number("time")?.let { Row(Modifier.height(44.dp), verticalAlignment = Alignment.CenterVertically) { Text(formatMessageTime(it), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) } }
     }
-    if (usageOpen && usage != null) AlertDialog(onDismissRequest = { usageOpen = false }, title = { Text("本轮用量") }, text = {
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            listOf("totalTokens" to "总 Token", "uncachedInputTokens" to "未缓存输入", "cacheReadTokens" to "缓存读取", "cacheWriteTokens" to "缓存写入", "outputTokens" to "输出", "reasoningTokens" to "其中思考").forEach { (key, label) ->
-                usage.number(key)?.let { Row(Modifier.fillMaxWidth()) { Text(label, Modifier.weight(1f)); Text(it.toString()) } }
+    if (usageOpen && usage != null) HLFloatingPanel("本轮用量", usage.number("totalTokens")?.let { "${exactTokens(it)} tok" }, "DATABASE", 360.dp, { usageOpen = false }) {
+            val total = usage.number("totalTokens"); val output = usage.number("outputTokens"); val cached = usage.number("cacheReadTokens")
+            if (total != null && output != null && cached != null && total >= output && cached in 0..(total - output)) {
+                cacheHitPercent(cached, total - output, 1)?.let { HLMetricRow("缓存命中", "$it%") }
+            }
+            listOf("uncachedInputTokens" to "未缓存输入", "cacheReadTokens" to "缓存读取", "cacheWriteTokens" to "缓存写入", "outputTokens" to "输出", "reasoningTokens" to "其中思考").forEach { (key, label) ->
+                usage.number(key)?.let { HLMetricRow(label, "${exactTokens(it)} tok") }
             }
             usage.array("routes").mapNotNull { it as? JsonObject }.forEach { Text("${it.string("provider")} / ${it.string("model")}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-        }
-    }, confirmButton = { TextButton(onClick = { usageOpen = false }) { Text("关闭") } })
+    }
 }

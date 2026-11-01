@@ -48,6 +48,73 @@ class HLInteractionsFlowTest {
     }
     private fun snapshot(name: String) { assertTrue(device.takeScreenshot(File(app.filesDir, "hl-interaction-$name.png"))) }
 
+    private fun verifyComposer(id: String, host: String) {
+        fun detail(text: String) = device.wait(Until.findObject(By.textContains(text)), 10_000) ?: throw AssertionError("Expected composer detail: $text")
+        waitText("会话统计验证已完成。")
+        val baseline = remote { withTimeout(20_000) { state.first { s ->
+            val data = io.dsh.mobile.sync.composerTelemetry(s.projections)
+            s.permissionCatalog != null && data.usage?.total == 65_810L && data.context != null && data.statistics?.steps == 2L
+        } } }
+        val defaultPreset = baseline.permissionCatalog!!.defaultPreset
+        remote { selectPermission(host, id, state.value.connectionGeneration, "read-only", false) }
+        device.wait(Until.findObject(By.desc("访问模式，当前：仅可查看")), 5000)!!
+        assertNotNull(device.findObject(By.desc("选择模型"))); assertNotNull(device.findObject(By.desc("思考强度")))
+        val modelBounds = device.findObject(By.desc("选择模型")).visibleBounds
+        val effortBounds = device.findObject(By.desc("思考强度")).visibleBounds
+        assertTrue("Model and effort stay on one horizontal line", kotlin.math.abs(modelBounds.centerY() - effortBounds.centerY()) < 8 && modelBounds.right <= effortBounds.left)
+        val outsideY = waitText("HL QA · composer").visibleBounds.centerY()
+        val inputBefore = device.findObject(By.desc("消息输入")).visibleBounds
+        val rotationBefore = device.displayRotation
+        snapshot("composer-dock")
+        device.findObject(By.descStartsWith("会话统计，")).click()
+        waitText("会话统计"); detail("模型用时"); detail("工具调用用时"); detail("首 token 平均（TTFT）"); detail("输出速度（TPS）")
+        assertEquals("Opening a floating panel must not rotate the page", rotationBefore, device.displayRotation)
+        snapshot("composer-statistics"); device.findObject(By.desc("关闭会话统计")).click()
+        val inputAfter = device.wait(Until.findObject(By.desc("消息输入")), 5000)!!.visibleBounds
+        assertEquals("Closing a panel preserves composer position", inputBefore.top, inputAfter.top)
+        assertEquals(inputBefore.bottom, inputAfter.bottom)
+        device.wait(Until.findObject(By.descStartsWith("Token 用量，")), 5000)!!.click()
+        waitText("Token 用量"); waitText("65,810 tok"); detail("77%"); detail("10,025 tok"); detail("50,075 tok"); detail("5,200 tok"); detail("510 tok")
+        snapshot("composer-usage")
+        device.click(device.displayWidth / 2, outsideY)
+        assertTrue(device.wait(Until.gone(By.text("Token 用量")), 5000))
+        device.wait(Until.findObject(By.descStartsWith("上下文已用 ")), 5000)!!.click()
+        detail("系统提示词"); detail("工具定义"); detail("对话消息"); snapshot("composer-context")
+        device.findObject(By.descStartsWith("关闭上下文已用 ")).click()
+        device.wait(Until.findObject(By.desc("访问模式，当前：仅可查看")), 5000)!!.click(); waitText("当前会话权限"); device.wait(Until.findObject(By.descStartsWith("选择工作区内修改")), 5000)!!.click()
+        device.wait(Until.findObject(By.desc("访问模式，当前：工作区内修改")), 5000)!!
+        stage("composer-desktop-permission", id)
+        device.wait(Until.findObject(By.desc("访问模式，当前：仅可查看")), 10_000)!!
+        device.findObject(By.desc("访问模式，当前：仅可查看")).click(); device.wait(Until.findObject(By.descStartsWith("选择完全权限")), 5000)!!.click()
+        waitText("确认启用完全权限？")
+        val confirmLabel = waitText("启用完全权限")
+        val confirmControl = generateSequence(confirmLabel) { it.parent }.take(6).first { it.isClickable }
+        assertFalse(confirmControl.isEnabled); snapshot("composer-risk")
+        tap("取消")
+        assertEquals("read-only", remote { state.value.projections?.get("permissions")?.jsonObject?.get("currentValue")?.jsonPrimitive?.content })
+        device.wait(Until.findObject(By.desc("访问模式，当前：仅可查看")), 5000)!!.click(); device.wait(Until.findObject(By.descStartsWith("选择完全权限")), 5000)!!.click()
+        tap("我已了解风险，并愿意继续"); tap("启用完全权限")
+        device.wait(Until.findObject(By.desc("访问模式，当前：完全权限")), 5000)!!.click(); device.wait(Until.findObject(By.descStartsWith("选择仅可查看")), 5000)!!.click()
+        device.wait(Until.findObject(By.desc("访问模式，当前：仅可查看")), 5000)!!
+        assertEquals(defaultPreset, remote { state.value.permissionCatalog?.defaultPreset })
+        if (InstrumentationRegistry.getArguments().getString("HL_EMULATOR_VIEWPORTS") == "1") {
+            try {
+                device.setOrientationLeft(); Thread.sleep(900)
+                device.wait(Until.findObject(By.descStartsWith("Token 用量，")), 5000)!!.click(); waitText("65,810 tok"); snapshot("composer-landscape")
+                device.findObject(By.desc("关闭Token 用量")).click()
+            } finally { device.setOrientationNatural(); device.unfreezeRotation() }
+        }
+        device.wait(Until.findObject(By.desc("消息输入")), 5000)!!.click(); Thread.sleep(900)
+        assertTrue("All four controls remain on the compact keyboard toolbar", device.hasObject(By.descStartsWith("Token 用量，")))
+        device.wait(Until.findObject(By.descStartsWith("上下文已用 ")), 5000)!!.click(); detail("系统提示词")
+        device.findObject(By.descStartsWith("关闭上下文已用 ")).click()
+        device.wait(Until.findObject(By.descStartsWith("Token 用量，")), 5000)!!.click()
+        remote { createSession("HL QA · empty composer") }
+        assertTrue(device.wait(Until.gone(By.text("Token 用量")), 5000))
+        assertFalse(device.hasObject(By.descStartsWith("Token 用量，")))
+        stage("composer-verified", id)
+    }
+
     @Test fun synchronizeAndAnswerDesktopInteractions() {
         assumeTrue(InstrumentationRegistry.getArguments().getString("HL_INTERACTION_QA") == "1")
         device.wakeUp()
@@ -72,7 +139,7 @@ class HLInteractionsFlowTest {
 
                 fun start(mode: String): String {
                     assertEquals("Only the isolated fixture may receive QA prompts", host, remote { state.value.activeHostId })
-                    val id = if (mode == "changes") remote {
+                    val id = if (mode in listOf("changes", "composer")) remote {
                         val created = call("sessions.create", buildJsonObject { put("workspaceId", config.getString("workspaceId")) }).jsonObject.getValue("sessionId").jsonPrimitive.content
                         renameSession(created, "HL QA · $mode"); refreshSessions(); selectSession(created); created
                     } else remote { createSession("HL QA · $mode") }
@@ -90,14 +157,15 @@ class HLInteractionsFlowTest {
 
                 val only = InstrumentationRegistry.getArguments().getString("HL_ONLY_MODE")
                 val modes = listOf("approval", "reject", "desktop", "cancel", "reconnect", "permission", "plan", "questions", "skip", "timed")
-                require(only == null || only in modes || only in listOf("conversation", "changes"))
-                for (mode in if (only in listOf("conversation", "changes")) listOf(requireNotNull(only)) else modes.filter { only == null || it == only }) {
+                require(only == null || only in modes || only in listOf("conversation", "changes", "composer"))
+                for (mode in if (only in listOf("conversation", "changes", "composer")) listOf(requireNotNull(only)) else modes.filter { only == null || it == only }) {
                     if (mode == "permission") {
                         device.wait(Until.findObject(By.desc("菜单")), 10_000)?.click()
                         tap("设置")
                     }
                     val id = start(mode)
                     when (mode) {
+                        "composer" -> verifyComposer(id, host)
                         "changes" -> {
                             waitText("交互验证已完成。")
                             remote { withTimeout(20_000) { state.first { s -> io.dsh.mobile.sync.changeAnnouncements(s.messages, id).isNotEmpty() } } }

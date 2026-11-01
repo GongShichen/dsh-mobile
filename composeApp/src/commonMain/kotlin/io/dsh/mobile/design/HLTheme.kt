@@ -14,6 +14,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.dsh.mobile.features.HLNavigationIcon
 
+internal data class HLTelemetryPalette(val system: Color, val tools: Color, val messages: Color)
+@Composable
+internal fun telemetryPalette(): HLTelemetryPalette = HLTelemetryPalette(MaterialTheme.colorScheme.outline,
+    if (isSystemInDarkTheme()) Color(0xFFC0ACFF) else Color(0xFF7956C7), MaterialTheme.colorScheme.primary)
+
 private val Light = lightColorScheme(
     primary = Color(0xFF355CE0), onPrimary = Color.White,
     primaryContainer = Color(0xFFEBF0FF), onPrimaryContainer = Color(0xFF243C8C),

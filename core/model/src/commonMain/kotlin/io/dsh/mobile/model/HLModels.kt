@@ -108,6 +108,8 @@ data class HLState(
     val workspaces: List<JsonObject> = emptyList(),
     val models: List<JsonObject> = emptyList(),
     val defaultModel: JsonObject? = null,
+    val permissionCatalog: HLPermissionCatalog? = null,
+    val permissionCatalogError: String? = null,
     val feedback: Map<String, JsonObject> = emptyMap(),
     val turnPresentation: Map<Long, JsonObject> = emptyMap(),
     val jobs: List<JsonObject> = emptyList(),
