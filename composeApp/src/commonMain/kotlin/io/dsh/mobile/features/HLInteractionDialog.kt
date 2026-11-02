@@ -30,7 +30,7 @@ private data class HLQuestionDraft(val selected: List<String> = emptyList(), val
 
 /** A single global queue, independent of the conversation or screen currently being viewed. */
 @Composable
-fun HLInteractionHost(state: HLState, repository: HLRepository, onOpenSession: (String) -> Unit) {
+fun HLInteractionHost(state: HLState, repository: HLRepository, autoOpen: Boolean = true, onOpenSession: (String) -> Unit) {
     val scope = rememberCoroutineScope()
     val focus = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
@@ -47,7 +47,7 @@ fun HLInteractionHost(state: HLState, repository: HLRepository, onOpenSession: (
         drafts = drafts.filterKeys { it in keys }
         errors = errors.filterKeys { it in keys }
         if (!state.connected || !state.interactionsReady) { selected = null; return@LaunchedEffect }
-        if (selected !in keys) selected = prompts.firstOrNull { it.key !in hidden }?.key
+        if (selected !in keys) selected = if (autoOpen) prompts.firstOrNull { it.key !in hidden }?.key else null
     }
     val active = prompts.firstOrNull { it.key == selected }
     LaunchedEffect(active?.key) { if (active != null) { focus.clearFocus(); keyboard?.hide(); bodyScroll.scrollTo(0) } }

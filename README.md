@@ -33,6 +33,15 @@ iOS 26+ 的导航与发送控件使用系统 Liquid Glass；较低系统版本�
 
 输入区下方用一行展示当前会话权限、会话统计、Token 用量和上下文占用，点击打开悬浮详情。权限与桌面双向同步，完全权限和自动审查保留单独确认；缓存命中、TTFT、TPS 等统计直接使用桌面的完整日志投影，历史分页不改变累计值。
 
+## 私人助理 · 0.2.0 源码预览
+
+在会话页顶部切换 **会话｜私人助理**。主对话可同时管理多个目标、阶段成果和独立事务，也可选择电脑上的已有工作区，新建执行会话或继续原会话。普通会话菜单中的「交给私人助理」会预选当前会话，提交需求后才建立委托。
+
+事务卡提供真实进度、待处理授权、成果核对和「打开执行会话」。两种模式的草稿、附件、滚动及展开状态独立保留在内存，切换模式或退出手机不停止远端工作。业务数据以桌面为准。
+
+需要 App 与插件均为 `0.2.0-alpha.1` 或更新版本；上方已发布的 0.1.x 安装包不包含此能力。Google Calendar / Gmail 是可选能力，需要的用户自行创建 Google“桌面应用”OAuth 客户端，在电脑 **私人助理 → 账户** 导入 JSON 并登录。配置与账户 token 只留在电脑钥匙串，手机管理任务范围授权；不配置 Google 也可使用其他助理功能。
+
+
 ## 同一份桌面状态
 
 **桌面 DSH 是唯一的业务数据源。** 手机按需获取历史、文件和状态；会话、消息、轨迹、草稿与文件改动快照仅保留在进程内存。配对电脑和必要设置会保存，设备身份由平台安全存储保护。
@@ -59,7 +68,7 @@ scripts/HLDoctor.sh
 | --- | --- |
 | 共享工程 | JDK 21；仓库提供 Gradle 9.5.0 wrapper，固定 Kotlin 2.4.21 / Compose Multiplatform 1.12.2。 |
 | Android | Android SDK 37、Build Tools 37.0.0、完整 NDK r27+、Rust / rustup；默认 NDK 为 `27.1.12297006`。 |
-| iOS | macOS、Xcode、XcodeGen；CI 使用 Xcode 26.5，本地也已验证 Xcode 27.2。 |
+| iOS | macOS、Xcode、XcodeGen；CI 使用 Xcode 26.5。 |
 
 Android 的 `minSdk` 为 26、`targetSdk` 为 36、`compileSdk` 为 37。iroh 官方绑定固定为 `1.2.0`，核心为 `1.4.1`；Swift 包要求 iOS 17.5+。默认 Android application ID 与 iOS Bundle ID 均为 `org.harnesslink.app`。
 
@@ -111,14 +120,13 @@ APNs 需要支持推送能力的开发者团队，并使用匹配的 Team、Bund
 
 </details>
 
-### 验证与贡献
+### 测试与贡献
 
 ```sh
 ./gradlew :core:database:testAndroidHostTest :core:protocol:testAndroidHostTest :core:sync:testAndroidHostTest
 DSH_IOS_SIMULATOR_ID=YOUR_SIMULATOR_UUID scripts/HLTestIOS.sh
 ```
 
-日常回归优先使用模拟器，通过配对链接连接真实 Mac 插件。审批、问答和文件改动的完整链路由插件仓库的 [QA 脚本](https://github.com/GongShichen/dsh-mobile-plugin/tree/main/scripts)驱动；测试使用隔离 profile。相机、推送、后台和蜂窝网络另做真机验收。
 
 在日常使用的 Android 真机上，使用 `assembleDebugAndroidTest`、`adb install -r -t` 和 `adb shell am instrument` 保留安装数据；避免会自动卸载 App 的 Gradle connected 任务。日志标签 `HarnessLink` / `HarnessLink-P2P` 不记录邀请密钥、令牌或对话正文。
 

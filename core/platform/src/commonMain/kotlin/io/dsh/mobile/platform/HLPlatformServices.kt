@@ -51,3 +51,4 @@ interface HLPushService {
 
 /** Device-local rendering of the desktop event timestamp; never a second message clock. */
 expect fun formatMessageTime(epochMillis: Long): String
+expect fun currentTimeZoneId(): String

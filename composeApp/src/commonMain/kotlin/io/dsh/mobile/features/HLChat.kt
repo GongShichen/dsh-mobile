@@ -13,6 +13,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -37,26 +38,39 @@ import io.dsh.mobile.design.keyboardInputArea
 import io.dsh.mobile.HLAppGraph
 import io.dsh.mobile.model.*
 import io.dsh.mobile.sync.HLRepository
+import io.dsh.mobile.sync.HLConversationViewKey
+import io.dsh.mobile.sync.HLConversationViewSnapshot
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.*
 
 @Composable
 fun HLChatScreen(state: HLState, repository: HLRepository, busy: Boolean, run: HLRunAction, onConnect: () -> Unit) {
-    var draft by remember(state.selectedSessionId) { mutableStateOf(state.draft) }
-    var attachments by remember(state.selectedSessionId) { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
+    val viewKey = HLConversationViewKey(state.activeHostId.orEmpty(), state.conversationMode, state.selectedSessionId)
+    val retained = remember(viewKey) { repository.conversationViews.get(viewKey) }
+    var draft by remember(viewKey) { mutableStateOf(retained.draft.ifEmpty { state.draft }) }
+    var attachments by remember(viewKey) { mutableStateOf(retained.attachments) }
     val focus = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
     fun dismissInput() { focus.clearFocus(); keyboard?.hide() }
     var attachmentMenu by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    val list = rememberLazyListState()
+    val list = remember(viewKey) { LazyListState(retained.scrollIndex, retained.scrollOffset) }
     val projector = remember(state.activeHostId, state.selectedSessionId) { HLConversationProjector() }
-    val disclosure = remember(state.activeHostId, state.selectedSessionId) { HLConversationDisclosure() }
+    val disclosure = remember(viewKey) { HLConversationDisclosure().apply { turns.putAll(retained.turns); groups.putAll(retained.groups); leaves.putAll(retained.leaves) } }
     val timeline = projector.project(state.messages, state.turnPresentation, state.selectedSession?.running == true)
     val rows = visibleConversationRows(timeline,
         timeline.turns.values.filter(disclosure::turnOpen).map { it.key }.toSet(),
         timeline.groups.values.filter(disclosure::groupOpen).map { it.key }.toSet())
-    var followTail by remember(state.selectedSessionId) { mutableStateOf(true) }
+    var followTail by remember(viewKey) { mutableStateOf(retained.followTail) }
+    LaunchedEffect(state.composerRevision, viewKey) {
+        val stored = repository.conversationViews.get(viewKey)
+        attachments = stored.attachments
+        if (state.composerRevision > 0) draft = stored.draft
+    }
+    DisposableEffect(viewKey) {
+        onDispose { repository.conversationViews.save(viewKey, HLConversationViewSnapshot(draft, attachments, list.firstVisibleItemIndex,
+            list.firstVisibleItemScrollOffset, followTail, disclosure.turns.toMap(), disclosure.groups.toMap(), disclosure.leaves.toMap())) }
+    }
     val dragging by list.interactionSource.collectIsDraggedAsState()
     LaunchedEffect(dragging) { if (dragging) followTail = false }
     LaunchedEffect(list) {
@@ -101,8 +115,8 @@ fun HLChatScreen(state: HLState, repository: HLRepository, busy: Boolean, run: H
         }
         Surface(modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 4.dp), shape = RoundedCornerShape(24.dp), border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant), shadowElevation = 0.dp, color = MaterialTheme.colorScheme.surface) {
             Column(Modifier.fillMaxWidth().padding(8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                attachments.forEach { (name, receipt) -> Row(verticalAlignment = Alignment.CenterVertically) { Text(name, modifier = Modifier.weight(1f), maxLines = 1); TextButton(onClick = { attachments = attachments.filterNot { it.second == receipt } }) { Text("移除") } } }
-                TextField(draft, { text -> draft = text; scope.launch { repository.setDraft(text) } }, modifier = Modifier.fillMaxWidth().keyboardInputArea("composer").semantics { contentDescription = "消息输入" }, placeholder = { Text(if (state.connected) "给 DeepSeek 发消息…" else "连接恢复后可发送") }, maxLines = 6, colors = TextFieldDefaults.colors(focusedContainerColor = MaterialTheme.colorScheme.surface, unfocusedContainerColor = MaterialTheme.colorScheme.surface, focusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent, unfocusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent), shape = MaterialTheme.shapes.large)
+                attachments.forEach { (name, receipt) -> Row(verticalAlignment = Alignment.CenterVertically) { Text(name, modifier = Modifier.weight(1f), maxLines = 1); TextButton(onClick = { attachments = attachments.filterNot { it.second == receipt }; repository.conversationViews.save(viewKey, repository.conversationViews.get(viewKey).copy(attachments = attachments)) }) { Text("移除") } } }
+                TextField(draft, { text -> draft = text; repository.conversationViews.updateDraft(viewKey, text); scope.launch { repository.setDraft(text, state.selectedSessionId, state.activeHostId) } }, modifier = Modifier.fillMaxWidth().keyboardInputArea("composer").semantics { contentDescription = "消息输入" }, placeholder = { Text(if (!state.connected) "连接恢复后可发送" else if (state.conversationMode == HLConversationMode.PERSONAL) "交办事务，或继续聊聊…" else "给 DeepSeek 发消息…") }, maxLines = 6, colors = TextFieldDefaults.colors(focusedContainerColor = MaterialTheme.colorScheme.surface, unfocusedContainerColor = MaterialTheme.colorScheme.surface, focusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent, unfocusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent), shape = MaterialTheme.shapes.large)
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Box {
                         HLPlatformActionButton(icon = "PLUS", label = "附件", enabled = state.connected && !busy && HLAppGraph.filePicker != null, onClick = { dismissInput(); attachmentMenu = true })
@@ -115,10 +129,11 @@ fun HLChatScreen(state: HLState, repository: HLRepository, busy: Boolean, run: H
                                         val files = picker.pick(photos)
                                         if (files.isEmpty()) return@run
                                         try {
-                                            if (state.selectedSessionId == null) repository.createSession()
+                                            if (repository.state.value.activeHostId != state.activeHostId || repository.state.value.conversationMode != state.conversationMode) throw kotlinx.coroutines.CancellationException("Composer changed during file selection")
+                                            val uploadSession = state.selectedSessionId ?: repository.createSession()
                                             files.forEach { file ->
-                                                val receipt = repository.uploadAttachment(file, picker)
-                                                attachments = attachments + (file.name to receipt)
+                                                val receipt = repository.uploadAttachment(file, picker, uploadSession)
+                                                repository.retainAttachment(HLConversationViewKey(state.activeHostId.orEmpty(), state.conversationMode, uploadSession), file.name, receipt)
                                             }
                                         } finally { files.forEach { picker.release(it.handle) } }
                                     }
@@ -130,7 +145,7 @@ fun HLChatScreen(state: HLState, repository: HLRepository, busy: Boolean, run: H
 
                     Spacer(Modifier.width(8.dp))
                     val generating = state.selectedSession?.running == true || state.messages.any { it.streaming }
-                    HLPlatformActionButton(icon = if (generating) "STOP" else "SEND", label = if (generating) "停止" else "发送", filled = true, enabled = state.connected && (!busy || generating) && (generating || draft.isNotBlank() || attachments.isNotEmpty()), onClick = { dismissInput(); if (generating) run { repository.cancelRun() } else { val text = draft; val receipts = attachments.map { it.second }; run { repository.sendMessage(text, receipts); draft = ""; attachments = emptyList() } } })
+                    HLPlatformActionButton(icon = if (generating) "STOP" else "SEND", label = if (generating) "停止" else "发送", filled = true, enabled = state.connected && (!busy || generating) && (generating || draft.isNotBlank() || attachments.isNotEmpty()), onClick = { dismissInput(); if (generating) run { state.selectedSessionId?.let { repository.cancelRun(it, state.activeHostId) } } else { val text = draft; val receipts = attachments.map { it.second }; run { repository.sendMessage(text, receipts, state.selectedSessionId, state.conversationMode, state.activeHostId, state.personalTarget); repository.clearComposer(viewKey); draft = ""; attachments = emptyList() } } })
                 }
             }
         }

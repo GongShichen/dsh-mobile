@@ -13,10 +13,12 @@
 		2DD961D4AD05ADA4B5286FF6 /* HLIOSPushCapability.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1C2EDBD0CF76FE519EE6A27 /* HLIOSPushCapability.swift */; };
 		5D7088F49140BE47EFD5D8AE /* HLAppUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 511AC8447027AB819DDB4574 /* HLAppUITests.swift */; };
 		62BA7DCCD3DA83A129627DBE /* HLApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD5658A0C6ADDFABE5A98B03 /* HLApp.swift */; };
+		642131B99A5D47EC521FA6DE /* HLPersonalFlowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C33ABEDD8A9774ED0DD0314C /* HLPersonalFlowTests.swift */; };
 		72CD63C54B5388445ADF7727 /* HLIOSGlassButtons.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23A6A7400A72A2E068FD58E1 /* HLIOSGlassButtons.swift */; };
 		7547A0171087B17418AFED4D /* HLAssets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 1103561A419E046D5C858B4C /* HLAssets.xcassets */; };
 		839BA4F97113800C212E9F92 /* IrohLib in Frameworks */ = {isa = PBXBuildFile; productRef = 022F7C5EB90AC5DB70E76A77 /* IrohLib */; };
 		863CFB02B5E81C81AE40ACB5 /* HLKotlinBuildStamp.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9A27E54CEBBA26DDA10612B /* HLKotlinBuildStamp.swift */; };
+		C368B822363BCE2357D48ADF /* HLPersonalLiveTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF91FD2ED06568D8B6F913F0 /* HLPersonalLiveTests.swift */; };
 		E0AB2A07DBFD6C2DEC770A03 /* HLIOSPlatformServices.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F9B5CE25F1E8166951F5D0E /* HLIOSPlatformServices.swift */; };
 		E674551140E6D7A36C00CAB6 /* HLIOSPushService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BC8BDFC43270C02C41CCA79 /* HLIOSPushService.swift */; };
 		F27A97A3E3B95F119C6B405D /* HLShared.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9C665FD6C9C8E5F597DB4B26 /* HLShared.framework */; };
@@ -45,10 +47,12 @@
 		9C665FD6C9C8E5F597DB4B26 /* HLShared.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = HLShared.framework; path = "../composeApp/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)/HLShared.framework"; sourceTree = "<group>"; };
 		A545BD0DC4E238629C7D2A73 /* iroh-MIT.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "iroh-MIT.txt"; sourceTree = "<group>"; };
 		C1C2EDBD0CF76FE519EE6A27 /* HLIOSPushCapability.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HLIOSPushCapability.swift; sourceTree = "<group>"; };
+		C33ABEDD8A9774ED0DD0314C /* HLPersonalFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HLPersonalFlowTests.swift; sourceTree = "<group>"; };
 		CD5658A0C6ADDFABE5A98B03 /* HLApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HLApp.swift; sourceTree = "<group>"; };
 		DF12DB61ED94D31824F2CC46 /* HLApp.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = HLApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		E6EBF1306C6716D0A12A6A3C /* iroh-Apache-2.0.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "iroh-Apache-2.0.txt"; sourceTree = "<group>"; };
 		F9A27E54CEBBA26DDA10612B /* HLKotlinBuildStamp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HLKotlinBuildStamp.swift; sourceTree = "<group>"; };
+		FF91FD2ED06568D8B6F913F0 /* HLPersonalLiveTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HLPersonalLiveTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -69,6 +73,8 @@
 			children = (
 				511AC8447027AB819DDB4574 /* HLAppUITests.swift */,
 				36480D1BAEC666F96917D6B4 /* HLIOSInteractionFlowTests.swift */,
+				C33ABEDD8A9774ED0DD0314C /* HLPersonalFlowTests.swift */,
+				FF91FD2ED06568D8B6F913F0 /* HLPersonalLiveTests.swift */,
 			);
 			path = Tests;
 			sourceTree = "<group>";
@@ -284,6 +290,8 @@
 			files = (
 				5D7088F49140BE47EFD5D8AE /* HLAppUITests.swift in Sources */,
 				17CEEE5DC3C6EBC1A6621B55 /* HLIOSInteractionFlowTests.swift in Sources */,
+				642131B99A5D47EC521FA6DE /* HLPersonalFlowTests.swift in Sources */,
+				C368B822363BCE2357D48ADF /* HLPersonalLiveTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -384,7 +392,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = HLAppIcon;
 				CODE_SIGN_ENTITLEMENTS = HLApp.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 6;
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(SRCROOT)/../composeApp/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)",
@@ -395,7 +403,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.1.4;
+				MARKETING_VERSION = 0.2.0;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-lsqlite3",
@@ -414,7 +422,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = HLAppIcon;
 				CODE_SIGN_ENTITLEMENTS = HLApp.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 6;
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(SRCROOT)/../composeApp/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)",
@@ -425,7 +433,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.1.4;
+				MARKETING_VERSION = 0.2.0;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-lsqlite3",

@@ -86,6 +86,14 @@ enum class HLConnectionStatus { DISCONNECTED, CONNECTING, PAIRING, AWAITING_APPR
 enum class HLConnectionPath { UNKNOWN, DIRECT, RELAY }
 
 data class HLState(
+    val conversationMode: HLConversationMode = HLConversationMode.NORMAL,
+    val personal: HLPersonalSnapshot? = null,
+    val personalError: String? = null,
+    val personalTarget: HLExecutionTarget? = null,
+    val personalRequestedTaskId: String? = null,
+    val personalGoogleReminderSuppressed: Boolean = false,
+    val personalPreferencesReady: Boolean = false,
+    val composerRevision: Long = 0,
     val hosts: List<HLDesktopHost> = emptyList(),
     val activeHostId: String? = null,
     val connection: HLConnectionStatus = HLConnectionStatus.DISCONNECTED,

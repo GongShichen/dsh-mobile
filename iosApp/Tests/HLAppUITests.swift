@@ -18,6 +18,8 @@ final class HLAppUITests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.wait(for: .runningForeground, timeout: 15), "The app must remain in the foreground after launch")
         returnToTabsIfNeeded()
+        let ordinary = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "会话模式")).firstMatch
+        if ordinary.exists && ordinary.isHittable { ordinary.tap() }
     }
 
     func testLaunchDevicesAndSettings() {

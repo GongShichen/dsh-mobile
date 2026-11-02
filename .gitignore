@@ -27,6 +27,9 @@ DerivedData/
 *.xcarchive/
 *firebase-adminsdk*.json
 google-services.json
+client_secret*.json
+google-oauth-client*.json
+HLGoogleClient.json
 *.sqlite
 *.sqlite-wal
 *.sqlite-shm
@@ -41,3 +44,18 @@ google-services.json
 # Local documentation and design workspaces
 /docs/
 /design-system/
+/protocol/
+/core/protocol/src/commonTest/kotlin/io/dsh/mobile/protocol/HLPersonalFixtureData.kt
+
+# Local plans, acceptance notes, and design reports
+**/*PLAN*.md
+**/*Plan*.md
+**/*plan*.md
+**/*ACCEPTANCE*.md
+**/*Acceptance*.md
+**/*acceptance*.md
+**/*VERIFICATION*.md
+**/*Verification*.md
+**/*verification*.md
+**/*方案*.md
+**/*验收*.md

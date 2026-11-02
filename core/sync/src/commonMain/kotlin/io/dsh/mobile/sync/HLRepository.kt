@@ -24,6 +24,9 @@ class HLRepository(
 ) {
     private val mutableState = MutableStateFlow(HLState())
     val state: StateFlow<HLState> = mutableState.asStateFlow()
+    val conversationViews = HLConversationViewStore()
+    val personal = HLPersonalRepository { snapshot -> mutableState.update { it.copy(personal = snapshot, personalError = null) } }
+    private val modeSelection = Mutex()
     private val lifecycle = Mutex()
     private val events = Mutex()
     private val refresh = Mutex()
@@ -59,7 +62,9 @@ class HLRepository(
                 val sessions = hostId?.let { cache.sessions(it) }.orEmpty()
                 val records = if (hostId != null && sessionId != null) cache.messages(hostId, sessionId) else emptyList()
                 val draft = if (hostId != null && sessionId != null) cache.draft(hostId, sessionId) else ""
-                mutableState.update { it.copy(hosts = hosts, activeHostId = hostId, selectedSessionId = sessionId, sessions = sessions, messages = records, draft = draft) }
+                val googleReminderSuppressed = cache.preference("personal.googleSetupReminder.suppressed") == "true"
+                mutableState.update { it.copy(hosts = hosts, activeHostId = hostId, selectedSessionId = sessionId, sessions = sessions, messages = records, draft = draft,
+                    personalGoogleReminderSuppressed = googleReminderSuppressed, personalPreferencesReady = true) }
                 initialized.complete(Unit)
             } catch (error: Throwable) { initialized.completeExceptionally(error); showError(error) }
         }
@@ -71,6 +76,12 @@ class HLRepository(
                 }
             }
         }
+    }
+
+    suspend fun setGoogleSetupReminderSuppressed(suppressed: Boolean) {
+        initialized.await()
+        cache.savePreference("personal.googleSetupReminder.suppressed", suppressed.toString())
+        mutableState.update { it.copy(personalGoogleReminderSuppressed = suppressed) }
     }
 
     suspend fun connect(hostId: String) {
@@ -100,6 +111,7 @@ class HLRepository(
             reportDiagnostic("pairing.qr.valid", "expiresInSeconds=${(invitation.expiresAt - clock.nowMillis()) / 1000}")
             lifecycle.withLock {
                 closeCurrent()
+                personal.reset()
                 val currentEpoch = epoch
                 mutableState.update { it.copy(activeHostId = null, connection = HLConnectionStatus.PAIRING, pairingName = invitation.name, error = null, sessions = emptyList(), messages = emptyList(), interactions = emptyList()) }
                 reportDiagnostic("pairing.transport.connect")
@@ -177,9 +189,11 @@ class HLRepository(
     }
 
     suspend fun forgetHost(hostId: String) {
-        if (state.value.activeHostId == hostId) disconnect()
+        if (state.value.activeHostId == hostId) { disconnect(); personal.reset() }
+        conversationViews.removeHost(hostId)
         cache.removeHost(hostId)
-        mutableState.update { if (it.activeHostId == hostId) HLState(hosts = cache.hosts()) else it.copy(hosts = cache.hosts()) }
+        mutableState.update { if (it.activeHostId == hostId) HLState(hosts = cache.hosts(), personalGoogleReminderSuppressed = it.personalGoogleReminderSuppressed,
+            personalPreferencesReady = it.personalPreferencesReady) else it.copy(hosts = cache.hosts()) }
     }
 
     suspend fun refreshSessions() = refresh.withLock {
@@ -193,7 +207,10 @@ class HLRepository(
 
     suspend fun selectSession(sessionId: String) = selection.withLock {
         val hostId = requireHost()
-        cache.savePreference("selected.session.$hostId", sessionId)
+        if (state.value.conversationMode == HLConversationMode.NORMAL) {
+            conversationViews.selectNormal(hostId, sessionId)
+            cache.savePreference("selected.session.$hostId", sessionId)
+        }
         val cached = cache.messages(hostId, sessionId)
         val draft = cache.draft(hostId, sessionId)
         events.withLock {
@@ -215,24 +232,95 @@ class HLRepository(
         if ("feedback" in state.value.capabilities) subscribe("feedback", buildJsonObject { put("sessionId", sessionId) }, sessionId)
     }
 
-    suspend fun setDraft(text: String) {
-        val hostId = state.value.activeHostId ?: return
-        val sessionId = state.value.selectedSessionId ?: return
-        mutableState.update { it.copy(draft = text) }
+    suspend fun setDraft(text: String, sessionId: String? = state.value.selectedSessionId, hostId: String? = state.value.activeHostId) {
+        if (hostId == null || sessionId == null) return
+        mutableState.update { if (it.activeHostId == hostId && it.selectedSessionId == sessionId) it.copy(draft = text) else it }
         cache.saveDraft(hostId, sessionId, text)
     }
 
+    /** A mode switch changes the visible subscription, never the Host's execution lifetime. */
+    suspend fun switchConversationMode(mode: HLConversationMode) {
+        val hostId = state.value.activeHostId
+        val previous = state.value
+        if (previous.conversationMode == mode) return
+        if (hostId != null && previous.conversationMode == HLConversationMode.NORMAL) previous.selectedSessionId?.let { conversationViews.selectNormal(hostId, it) }
+        mutableState.update { it.copy(conversationMode = mode, selectedSessionId = null, messages = emptyList(), draft = "", sessionState = null,
+            projections = null, feedback = emptyMap(), turnPresentation = emptyMap(), jobs = emptyList()) }
+        if (hostId == null) return
+        cache.savePreference("view.mode.$hostId", mode.name)
+        modeSelection.withLock {
+            if (state.value.activeHostId != hostId || state.value.conversationMode != mode) return@withLock
+            val target = if (mode == HLConversationMode.NORMAL) conversationViews.normalSession(hostId) ?: cache.preference("selected.session.$hostId")
+                else state.value.personal?.profile?.takeIf { it.mainSessionReady }?.mainSessionId
+            if (target != null) selectSession(target)
+            else clearVisibleConversation()
+        }
+    }
+
+    private suspend fun clearVisibleConversation() = selection.withLock {
+        events.withLock { reducer = null; mutableState.update { it.copy(selectedSessionId = null, messages = emptyList(), draft = "", sessionState = null,
+            projections = null, feedback = emptyMap(), turnPresentation = emptyMap(), jobs = emptyList(), hasMoreHistory = false) } }
+        val previous = events.withLock { router.handles().filter { it.second.sessionId != null }.also { rows -> rows.forEach { router.remove(it.first.subscriptionId) } } }
+        previous.forEach { (handle, _) -> runCatching { requireRpc().call("unsubscribe", buildJsonObject { put("subscriptionId", handle.subscriptionId) }) } }
+    }
+
+    suspend fun enablePersonal() {
+        val profile = state.value.personal?.profile ?: throw HLProtocolException("请先连接支持私人助理的电脑")
+        personal.command("configure", buildJsonObject { put("revision", profile.revision); put("enabled", true) })
+        personal.command("open")
+    }
+    suspend fun openPersonalConversation() {
+        val snapshot = state.value.personal ?: return
+        if (!snapshot.profile.enabled) return
+        if (!snapshot.profile.mainSessionReady) { personal.command("open"); return }
+        val sid = snapshot.profile.mainSessionId ?: return
+        if (state.value.conversationMode == HLConversationMode.PERSONAL && state.value.selectedSessionId != sid) selectSession(sid)
+    }
+    fun selectPersonalTarget(target: HLExecutionTarget?) { mutableState.update { it.copy(personalTarget = target) } }
+    suspend fun delegateCurrentConversation() {
+        val sid = requireSelectedSession()
+        val workspaceId = state.value.selectedSession?.workspaceId ?: state.value.workspaces.firstOrNull { row -> row.array("sessionIds").any { (it as? JsonPrimitive)?.contentOrNull == sid } }?.string("workspaceId")
+        selectPersonalTarget(HLExecutionTarget("session-continue", workspaceId, sid))
+        switchConversationMode(HLConversationMode.PERSONAL)
+    }
+    suspend fun openDelegatedSession(sessionId: String) {
+        if (state.value.conversationMode != HLConversationMode.NORMAL) switchConversationMode(HLConversationMode.NORMAL)
+        refreshSessions(); selectSession(sessionId)
+    }
+    fun clearPersonalNavigationRequest() { mutableState.update { it.copy(personalRequestedTaskId = null) } }
+
     suspend fun createSession(title: String? = null): String {
+        val capturedHost = requireHost()
+        val capturedMode = state.value.conversationMode
+        val capturedSelection = state.value.selectedSessionId
         val result = call("sessions.create", buildJsonObject { put("sessionId", newOperationId()) }).jsonObject
         val id = result.string("sessionId") ?: throw HLProtocolException("Missing new session id")
         if (!title.isNullOrBlank()) renameSession(id, title)
-        refreshSessions(); selectSession(id)
+        if (state.value.activeHostId == capturedHost) {
+            if (capturedSelection == null) conversationViews.copyIfAbsent(HLConversationViewKey(capturedHost, capturedMode, null), HLConversationViewKey(capturedHost, capturedMode, id))
+            conversationViews.selectNormal(capturedHost, id)
+            refreshSessions()
+            if (state.value.conversationMode == capturedMode) selectSession(id)
+        }
         return id
     }
 
-    suspend fun sendMessage(text: String, receiptIds: List<String> = emptyList()) {
+    suspend fun sendMessage(text: String, receiptIds: List<String> = emptyList(), boundSessionId: String? = state.value.selectedSessionId,
+        boundMode: HLConversationMode = state.value.conversationMode, boundHostId: String? = state.value.activeHostId,
+        boundTarget: HLExecutionTarget? = state.value.personalTarget) {
         if (text.isBlank() && receiptIds.isEmpty()) return
-        val sessionId = state.value.selectedSessionId ?: createSession()
+        if (boundHostId == null || requireHost() != boundHostId) throw CancellationException("The selected Host changed before sending")
+        val sessionId = boundSessionId ?: if (boundMode == HLConversationMode.NORMAL) createSession() else throw HLProtocolException("请等待助理主对话准备完成")
+        if (boundMode == HLConversationMode.PERSONAL) {
+            personal.command("submitMessage", buildJsonObject {
+                put("text", text); put("receiptIds", JsonArray(receiptIds.map(::JsonPrimitive)))
+                put("clientTimeZone", currentTimeZoneId())
+                boundTarget?.let { put("target", it.toJson()) }
+            })
+            setDraft("", sessionId, boundHostId)
+            clearComposer(HLConversationViewKey(boundHostId, boundMode, sessionId))
+            return
+        }
         call("sessions.prompt", buildJsonObject {
             put("sessionId", sessionId); put("requestId", newOperationId()); put("mode", "queue")
             put("content", buildJsonArray {
@@ -240,10 +328,24 @@ class HLRepository(
                 receiptIds.forEach { add(buildJsonObject { put("type", "file"); put("receiptId", it) }) }
             })
         })
-        setDraft("")
+        setDraft("", sessionId, boundHostId)
+        clearComposer(HLConversationViewKey(boundHostId, boundMode, sessionId))
     }
 
-    suspend fun cancelRun() { call("sessions.cancel", buildJsonObject { put("sessionId", requireSelectedSession()) }) }
+    fun retainAttachment(key: HLConversationViewKey, name: String, receipt: String) {
+        val view = conversationViews.get(key)
+        conversationViews.save(key, view.copy(attachments = view.attachments + (name to receipt)))
+        mutableState.update { it.copy(composerRevision = it.composerRevision + 1) }
+    }
+    fun clearComposer(key: HLConversationViewKey) {
+        conversationViews.save(key, conversationViews.get(key).copy(draft = "", attachments = emptyList()))
+        mutableState.update { it.copy(composerRevision = it.composerRevision + 1) }
+    }
+
+    suspend fun cancelRun(sessionId: String = requireSelectedSession(), hostId: String? = state.value.activeHostId) {
+        if (hostId != state.value.activeHostId) throw CancellationException("Host changed")
+        call("sessions.cancel", buildJsonObject { put("sessionId", sessionId) })
+    }
 
     suspend fun refreshPermissionCatalog() = permissionRefresh.withLock {
         val generation = epoch
@@ -536,7 +638,15 @@ class HLRepository(
             val host = cache.hosts().firstOrNull { it.id == hostId || it.endpointId == hostId } ?: throw HLProtocolException("通知来自未配对的电脑")
             if (state.value.activeHostId != host.id || !state.value.connected) connect(host.id)
             if (!state.value.connected) return
-            if (sessionId != null) selectSession(sessionId)
+            if (eventId.startsWith("personal:") && "personal-agent-v1" in state.value.capabilities) {
+                personal.refresh()
+                switchConversationMode(HLConversationMode.PERSONAL)
+                openPersonalConversation()
+                val task = state.value.personal?.tasks?.firstOrNull { it.binding?.sessionId == sessionId }
+                mutableState.update { it.copy(personalRequestedTaskId = task?.id ?: "") }
+            } else if (sessionId != null) {
+                openDelegatedSession(sessionId)
+            }
             call("push.received", buildJsonObject { put("eventId", eventId) })
         } catch (error: Throwable) {
             if (error is CancellationException) throw error
@@ -545,14 +655,16 @@ class HLRepository(
     }
 
     /** Hash and stream a user-selected file; only desktop-issued receipts enter a prompt. */
-    suspend fun uploadAttachment(file: HLPickedFile, picker: HLFilePicker): String = try {
-        uploadSelectedFile(file, picker)
+    suspend fun uploadAttachment(file: HLPickedFile, picker: HLFilePicker, sessionId: String? = state.value.selectedSessionId): String = try {
+        uploadSelectedFile(file, picker, sessionId)
     } finally { withContext(NonCancellable) { picker.release(file.handle) } }
 
-    private suspend fun uploadSelectedFile(file: HLPickedFile, picker: HLFilePicker): String {
+    private suspend fun uploadSelectedFile(file: HLPickedFile, picker: HLFilePicker, boundSessionId: String?): String {
         awaitConnected()
         require(file.length >= 0) { "Invalid file length" }
-        val sessionId = state.value.selectedSessionId ?: createSession()
+        val sessionId = boundSessionId ?: createSession()
+        val uploadEpoch = epoch
+        val uploadRpc = requireRpc()
         val connection = requireRpc().connection
         val hasher = createSha256Hasher()
         val checksum = try {
@@ -566,6 +678,7 @@ class HLRepository(
             }
             hasher.finishHex()
         } finally { hasher.close() }
+        if (uploadEpoch != epoch || rpc !== uploadRpc) throw CancellationException("Upload connection changed")
         val begin = call("attachments.begin", buildJsonObject {
             put("sessionId", sessionId); put("name", file.name); put("size", file.length); put("sha256", checksum)
             file.mimeType?.let { put("mediaType", it) }
@@ -592,6 +705,7 @@ class HLRepository(
                     stream.finish()
                 } finally { withContext(NonCancellable) { runCatching { stream.close() } } }
             }
+            if (uploadEpoch != epoch || rpc !== uploadRpc) throw CancellationException("Upload connection changed")
             val receipt = call("attachments.finalize", buildJsonObject { put("uploadId", uploadId) }).jsonObject
             return receipt.string("receiptId") ?: throw HLProtocolException("Missing attachment receipt")
         } catch (error: Throwable) {
@@ -637,11 +751,15 @@ class HLRepository(
 
     private suspend fun connectOnce(hostId: String) {
         val host = cache.hosts().firstOrNull { it.id == hostId } ?: throw HLProtocolException("找不到已配对的电脑")
-        val reopenSession = state.value.takeIf { it.activeHostId == hostId }?.selectedSessionId ?: cache.preference("selected.session.$hostId")
+        val reopenSession = conversationViews.normalSession(hostId) ?: state.value.takeIf { it.activeHostId == hostId && it.conversationMode == HLConversationMode.NORMAL }?.selectedSessionId ?: cache.preference("selected.session.$hostId")
+        val retained = state.value.takeIf { it.activeHostId == hostId }
+        if (retained == null) personal.reset()
         closeCurrent()
         val currentEpoch = epoch
         val savedSessions = cache.sessions(hostId)
-        mutableState.update { it.copy(activeHostId = hostId, connection = HLConnectionStatus.CONNECTING, error = null, path = HLConnectionPath.UNKNOWN, sessions = savedSessions, messages = emptyList(), selectedSessionId = null, interactions = emptyList(), workspaces = emptyList(), models = emptyList(), defaultModel = null, feedback = emptyMap(), turnPresentation = emptyMap(), jobs = emptyList(), capabilities = emptySet(), sessionState = null, projections = null, draft = "", operations = emptyList()) }
+        mutableState.update { it.copy(activeHostId = hostId, connection = HLConnectionStatus.CONNECTING, error = null, path = HLConnectionPath.UNKNOWN, sessions = savedSessions,
+            messages = retained?.messages.orEmpty(), selectedSessionId = retained?.selectedSessionId, interactions = emptyList(), workspaces = retained?.workspaces.orEmpty(), models = retained?.models.orEmpty(), defaultModel = retained?.defaultModel,
+            feedback = retained?.feedback.orEmpty(), turnPresentation = retained?.turnPresentation.orEmpty(), jobs = retained?.jobs.orEmpty(), capabilities = retained?.capabilities.orEmpty(), sessionState = retained?.sessionState, projections = retained?.projections, draft = retained?.draft.orEmpty(), personalTarget = retained?.personalTarget, operations = emptyList()) }
         val connection = openPeer(HLPeerDescriptor(host.endpointId, host.ticket))
         try {
             val session = openRpc(connection, currentEpoch)
@@ -652,7 +770,7 @@ class HLRepository(
             val updated = hostFromHello(hello, host.endpointId, host.ticket)
             cache.saveHost(updated)
             activate(updated, session, currentEpoch)
-            if (reopenSession != null) runCatching { selectSession(reopenSession) }.onFailure(::showError)
+            if (reopenSession != null && state.value.conversationMode == HLConversationMode.NORMAL) runCatching { selectSession(reopenSession) }.onFailure(::showError)
         } catch (error: Throwable) {
             withContext(NonCancellable) { closeCurrent() }
             throw error
@@ -661,6 +779,10 @@ class HLRepository(
 
     private suspend fun activate(host: HLDesktopHost, session: HLRPCSession, currentEpoch: Long) {
         cache.savePreference("selected.host", host.id)
+        val savedMode = cache.preference("view.mode.${host.id}")?.let { value -> HLConversationMode.entries.firstOrNull { it.name == value } } ?: HLConversationMode.NORMAL
+        mutableState.update { it.copy(conversationMode = savedMode, personalTarget = if (it.activeHostId == host.id) it.personalTarget else null, personalRequestedTaskId = null) }
+        if ("personal-agent-v1" in host.capabilities) personal.bind(host.id, currentEpoch) { method, params -> session.call(method, params) }
+        else personal.reset()
         mutableState.update { it.copy(hosts = cache.hosts(), activeHostId = host.id, connection = HLConnectionStatus.SYNCING, pairingName = null, capabilities = host.capabilities.toSet(), operations = cache.operations(host.id)) }
         recoverOperations(host.id)
         pathJob?.cancel()
@@ -673,6 +795,7 @@ class HLRepository(
         subscribe("workspaces", JsonObject(emptyMap()))
         subscribe("sessionControl", JsonObject(emptyMap()))
         if ("permissions" in host.capabilities) subscribe("permissions", JsonObject(emptyMap()))
+        if ("personal-agent-v1" in host.capabilities) subscribe("personal", JsonObject(emptyMap()))
         runCatching { refreshModels() }.onFailure(::showError)
         if (currentEpoch == epoch) mutableState.update { it.copy(connection = HLConnectionStatus.CONNECTED) }
         recoverPendingQuestions(currentEpoch)
@@ -757,6 +880,10 @@ class HLRepository(
             return
         }
         when (routed.target.topic) {
+            "personal" -> if (payload.string("type") == "baseline") {
+                try { personal.accept(payload.getValue("value")) }
+                catch (error: Throwable) { if (error is CancellationException) throw error; mutableState.update { it.copy(personalError = "私人助理状态读取失败，请更新插件后重试") } }
+            }
             "permissions" -> if (payload.string("type") == "baseline") {
                 try {
                     val catalog = WireJson.decodeFromJsonElement(HLPermissionCatalog.serializer(), payload.getValue("value"))
@@ -858,6 +985,7 @@ class HLRepository(
     private suspend fun connectionLost(error: Throwable) {
         val hostId = state.value.activeHostId
         rpc = null
+        personal.unbind()
         if (error is HLLogicalMessageTooLargeException) {
             resumeAllowed = false
             mutableState.update { it.copy(connection = HLConnectionStatus.ERROR, path = HLConnectionPath.UNKNOWN, error = error.message) }
@@ -898,6 +1026,7 @@ class HLRepository(
         interactionTimer?.cancel(); interactionTimer = null
         questionRecovery?.cancel(); questionRecovery = null
         val previous = rpc; rpc = null
+        personal.unbind()
         previous?.close()
         events.withLock { router.reset(); reducer = null; interactionReducer.reset(); questionClaims.clear(); workspaceReducer.reset(); projectionReducer.reset() }
         mutableState.update { it.copy(interactions = emptyList(), interactionsReady = false, pendingQuestions = emptyList(), pendingQuestionsLoading = false, resolvingQuestions = emptySet(), connectionGeneration = epoch, permissionCatalog = null, permissionCatalogError = null) }

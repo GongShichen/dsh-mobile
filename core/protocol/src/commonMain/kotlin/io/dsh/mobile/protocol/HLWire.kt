@@ -45,10 +45,13 @@ fun streamHeader(kind: String): JsonObject = buildJsonObject {
 
 /** Fixed mobile RPC allowlist. This is deliberately not a generic DSH RPC tunnel. */
 object HLMethods {
+    val personalMethods = setOf("snapshot", "configure", "open", "submitMessage", "listTasks", "getTask", "listGoals", "createGoal", "updateGoal",
+        "createTask", "appendTask", "cancelTask", "resumeTask", "confirmTask", "listMemories", "putMemory", "forgetMemory", "authorizeTask", "revokeGrant",
+        "createRoutine", "editRoutine", "reconcileRoutine", "wakeTask", "listWorkspaces", "listSessions", "sessionContext", "beginGoogleAuth", "disconnectGoogle", "reconcileAction", "retryInput", "setTaskAccounts").map { "personal.$it" }.toSet()
     val reads = setOf("permissions.catalog", "changes.summary", "changes.diff", "feedback.list", "hello", "pairing.status", "sessions.list", "sessions.search", "sessions.events", "sessions.state", "sessions.projections", "workspaces.list", "models.list", "files.list", "files.stat", "files.read", "files.download", "jobs.list", "attachments.status", "push.configuration")
     val mutations = setOf("permissions.select", "feedback.put", "feedback.delete", "sessions.create", "sessions.rename", "sessions.fork", "sessions.prompt", "sessions.cancel", "sessions.updateQueue", "sessions.archive", "sessions.unarchive", "sessions.pin", "sessions.unpin", "workspaces.create", "workspaces.rename", "models.select", "jobs.kill", "interactions.reply", "questions.answer", "attachments.begin", "attachments.finalize", "attachments.cancel", "push.describe", "push.register", "push.unregister", "push.received")
     val connectionMethods = setOf("pairing.request", "subscribe", "unsubscribe")
     fun requireAllowed(method: String) {
-        if (method !in reads && method !in mutations && method !in connectionMethods) throw HLProtocolException("Unsupported mobile method")
+        if (method !in reads && method !in mutations && method !in connectionMethods && method !in personalMethods) throw HLProtocolException("Unsupported mobile method")
     }
 }

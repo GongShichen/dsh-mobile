@@ -9,6 +9,24 @@ import kotlinx.serialization.json.put
 import kotlin.test.*
 
 class HLDeviceOnlyStorageTest {
+    @Test fun reminderOptOutSurvivesReopeningWithoutPersistingConversationPreferences() = runTest {
+        val driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
+        HLDatabase.Schema.create(driver)
+        try {
+            val key = "personal.googleSetupReminder.suppressed"
+            val cache = HLSqlDelightCache(driver)
+            cache.savePreference(key, "true")
+            cache.savePreference("selected.session.host", "private-session")
+            cache.saveDraft("host", "private-session", "private draft")
+            assertEquals("true", HLDatabase(driver).hLCacheQueries.selectPreference(key).executeAsOneOrNull())
+            val reopened = HLSqlDelightCache(driver)
+            assertEquals("true", reopened.preference(key))
+            assertNull(reopened.preference("selected.session.host"))
+            assertEquals("", reopened.draft("host", "private-session"))
+            reopened.savePreference(key, "false")
+            assertEquals("false", HLSqlDelightCache(driver).preference(key))
+        } finally { driver.close() }
+    }
     @Test fun upgradePurgesBusinessRowsAndNewBusinessWritesStayInMemory() = runTest {
         val driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
         HLDatabase.Schema.create(driver)

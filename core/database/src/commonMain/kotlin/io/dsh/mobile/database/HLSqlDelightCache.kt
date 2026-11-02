@@ -41,7 +41,7 @@ class HLSqlDelightCache(private val driver: SqlDriver) : HLCache {
                 pragma("PRAGMA secure_delete = ON")
                 database.transaction {
                     for (table in listOf("cached_session", "message_record", "draft", "pending_operation", "domain_cursor")) driver.execute(null, "DELETE FROM $table", 0)
-                    driver.execute(null, "DELETE FROM preference WHERE preference_key <> 'selected.host'", 0)
+                    driver.execute(null, "DELETE FROM preference WHERE preference_key NOT IN ('selected.host', 'personal.googleSetupReminder.suppressed')", 0)
                 }
                 pragma("PRAGMA wal_checkpoint(TRUNCATE)")
                 purged = true
@@ -49,9 +49,10 @@ class HLSqlDelightCache(private val driver: SqlDriver) : HLCache {
             block()
         }
     }
-    override suspend fun preference(key: String): String? = access { if (key == "selected.host") queries.selectPreference(key).executeAsOneOrNull() else preferences[key] }
+    private fun durablePreference(key: String) = key == "selected.host" || key == "personal.googleSetupReminder.suppressed"
+    override suspend fun preference(key: String): String? = access { if (durablePreference(key)) queries.selectPreference(key).executeAsOneOrNull() else preferences[key] }
     override suspend fun savePreference(key: String, value: String?) = access {
-        if (key == "selected.host") { if (value == null) queries.deletePreference(key) else queries.upsertPreference(key, value) }
+        if (durablePreference(key)) { if (value == null) queries.deletePreference(key) else queries.upsertPreference(key, value) }
         else if (value == null) preferences.remove(key) else preferences[key] = value
         Unit
     }
